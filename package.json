@@ -5,5 +5,8 @@
   "scripts": {
     "build:portal": "rm -rf dist && mkdir -p dist && cp -R apps/portal/. dist/ && find dist -name '._*' -type f -delete",
     "build": "npm run build:portal"
+  },
+  "dependencies": {
+    "@vercel/functions": "^2.2.13"
   }
 }
