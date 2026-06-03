@@ -9,40 +9,48 @@
   <body>
     <aside class="sidebar">
       <div class="brand">
-        <div class="mark">E</div>
+        <div class="mark" aria-hidden="true">E</div>
         <div>
           <h1>Eidos</h1>
           <p>personal agent</p>
         </div>
       </div>
-      <nav>
-        <button class="active" data-view="today">Today</button>
-        <button data-view="messages">Messages</button>
-        <button data-view="people">People</button>
-        <button data-view="history">History</button>
-        <button data-view="skills">Skills</button>
-        <button data-view="profiles">Profiles</button>
-        <button data-view="system">System</button>
+
+      <nav aria-label="Portal views">
+        <button class="active" data-view="today" title="Today"><span aria-hidden="true">+</span>Today</button>
+        <button data-view="messages" title="Messages"><span aria-hidden="true">#</span>Messages</button>
+        <button data-view="people" title="People"><span aria-hidden="true">@</span>People</button>
+        <button data-view="history" title="History"><span aria-hidden="true">=</span>History</button>
+        <button data-view="skills" title="Skills"><span aria-hidden="true">*</span>Skills</button>
+        <button data-view="profiles" title="Profiles"><span aria-hidden="true">/</span>Profiles</button>
+        <button data-view="system" title="System"><span aria-hidden="true">~</span>System</button>
       </nav>
     </aside>
 
     <main>
       <section class="toolbar">
         <div>
+          <p class="eyebrow" id="view-kicker">Overview</p>
           <h2 id="view-title">Today</h2>
           <p id="view-subtitle">Grounded check-in surface for schedule, messages, and relevant context.</p>
         </div>
-        <select id="profile-select" aria-label="Active profile">
-          <option value="personal">personal</option>
-          <option value="creative">creative</option>
-          <option value="bioinformatics">bioinformatics</option>
-        </select>
+
+        <div class="toolbar-actions">
+          <label>
+            <span>Profile</span>
+            <select id="profile-select" aria-label="Active profile">
+              <option value="personal">personal</option>
+              <option value="creative">creative</option>
+              <option value="bioinformatics">bioinformatics</option>
+            </select>
+          </label>
+          <div class="runtime-pill" id="runtime-pill">Loading</div>
+        </div>
       </section>
 
-      <section id="content" class="content-grid"></section>
+      <section id="content" class="content" aria-live="polite"></section>
     </main>
 
     <script src="./main.js"></script>
   </body>
 </html>
-
