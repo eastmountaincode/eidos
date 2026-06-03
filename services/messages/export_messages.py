@@ -64,6 +64,14 @@ def normalize_phone(value: str) -> str:
     return re.sub(r"\D", "", value or "")
 
 
+def phone_keys(value: str) -> set[str]:
+    digits = normalize_phone(value)
+    keys = {digits} if digits else set()
+    if len(digits) == 11 and digits.startswith("1"):
+        keys.add(digits[-10:])
+    return keys
+
+
 def load_overrides(path: Path) -> dict[str, str]:
     overrides: dict[str, str] = {}
     if not path.exists():
@@ -76,17 +84,20 @@ def load_overrides(path: Path) -> dict[str, str]:
         name = name.strip()
         if not name:
             continue
-        for key in {normalize_handle(raw), normalize_phone(raw)}:
+        for key in {normalize_handle(raw), *phone_keys(raw)}:
             if key:
                 overrides[key] = name
     return overrides
 
 
 def address_book_dbs(home: Path) -> list[Path]:
-    sources = home / "Library/Application Support/AddressBook/Sources"
-    if not sources.exists():
-        return []
-    return sorted(sources.glob("*/AddressBook-v*.abcddb"), key=lambda p: p.stat().st_mtime, reverse=True)
+    address_book = home / "Library/Application Support/AddressBook"
+    candidates = [
+        *address_book.glob("AddressBook-v*.abcddb"),
+        *address_book.glob("Sources/*/AddressBook-v*.abcddb"),
+    ]
+    unique = {db.resolve(): db for db in candidates}
+    return sorted(unique.values(), key=lambda p: p.stat().st_mtime, reverse=True)
 
 
 def load_contacts(home: Path, overrides: dict[str, str]) -> dict[str, str]:
@@ -94,11 +105,17 @@ def load_contacts(home: Path, overrides: dict[str, str]) -> dict[str, str]:
     for db in address_book_dbs(home):
         try:
             conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-            rows = conn.execute("""
+            phone_rows = conn.execute("""
                 SELECT p.ZFULLNUMBER, COALESCE(r.ZFIRSTNAME, ''), COALESCE(r.ZLASTNAME, '')
                 FROM ZABCDPHONENUMBER p
                 JOIN ZABCDRECORD r ON p.ZOWNER = r.Z_PK
                 WHERE p.ZFULLNUMBER IS NOT NULL
+            """).fetchall()
+            email_rows = conn.execute("""
+                SELECT e.ZADDRESS, COALESCE(r.ZFIRSTNAME, ''), COALESCE(r.ZLASTNAME, '')
+                FROM ZABCDEMAILADDRESS e
+                JOIN ZABCDRECORD r ON e.ZOWNER = r.Z_PK
+                WHERE e.ZADDRESS IS NOT NULL
             """).fetchall()
         except sqlite3.Error:
             continue
@@ -108,9 +125,14 @@ def load_contacts(home: Path, overrides: dict[str, str]) -> dict[str, str]:
             except Exception:
                 pass
 
-        for number, first, last in rows:
+        for number, first, last in phone_rows:
             name = f"{first} {last}".strip()
-            key = normalize_phone(number)
+            for key in phone_keys(number):
+                if key and name and key not in contacts:
+                    contacts[key] = name
+        for email, first, last in email_rows:
+            name = f"{first} {last}".strip()
+            key = normalize_handle(email)
             if key and name and key not in contacts:
                 contacts[key] = name
     return contacts
@@ -144,7 +166,7 @@ def clean_text(text: str, max_len: int) -> str:
 def resolve_contact(handle: str, group_name: str, contacts: dict[str, str]) -> str:
     if group_name:
         return group_name
-    for key in (normalize_handle(handle), normalize_phone(handle)):
+    for key in (normalize_handle(handle), *phone_keys(handle)):
         if key and key in contacts:
             return contacts[key]
     return handle or "Unknown"
