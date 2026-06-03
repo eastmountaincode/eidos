@@ -119,7 +119,7 @@ nav button:hover {
 
 main {
   min-width: 0;
-  padding: 28px;
+  padding: 22px 24px;
 }
 
 .toolbar {
@@ -127,7 +127,7 @@ main {
   justify-content: space-between;
   align-items: flex-start;
   gap: 22px;
-  margin-bottom: 22px;
+  margin-bottom: 12px;
 }
 
 .eyebrow {
@@ -139,7 +139,7 @@ main {
 }
 
 .toolbar h2 {
-  font-size: 32px;
+  font-size: 26px;
   line-height: 1.1;
 }
 
@@ -175,12 +175,12 @@ select {
 .badge {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
+  min-height: 26px;
   border-radius: 999px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   background: var(--ok-bg);
   color: var(--ok);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -197,7 +197,7 @@ select {
 
 .content {
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .section-grid {
@@ -207,16 +207,14 @@ select {
 }
 
 .panel,
-.metric,
 .table-wrap {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: var(--shadow);
 }
 
 .panel {
-  padding: 16px;
+  padding: 12px;
 }
 
 .panel.span-4 {
@@ -248,11 +246,11 @@ select {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .panel h3 {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .muted,
@@ -267,32 +265,33 @@ select {
   background: rgba(255, 255, 255, 0.56);
 }
 
-.metrics,
-.status-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+.summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
 }
 
-.status-strip {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.summary-fact {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
 }
 
-.metric {
-  padding: 10px 12px;
+.summary-fact strong {
+  font-size: 13px;
+  line-height: 1;
 }
 
-.metric strong {
-  display: block;
-  font-size: 18px;
-  line-height: 1.1;
-}
-
-.metric span {
-  display: block;
-  margin-top: 5px;
+.summary-fact span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .list {
@@ -330,29 +329,60 @@ select {
   font-size: 12px;
 }
 
-.conversation-list {
+.people-table {
   display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.people-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) 82px minmax(110px, 150px) minmax(130px, 1fr) 120px;
   gap: 12px;
-}
-
-.conversation-row {
-  display: grid;
-  gap: 7px;
-  padding-bottom: 12px;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 0;
   border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
 }
 
-.conversation-row:last-child {
-  padding-bottom: 0;
+.people-row:last-child {
   border-bottom: 0;
 }
 
-.conversation-meta {
+.table-head {
+  min-height: 30px;
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.person-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.balance-cell {
+  max-width: 150px;
+}
+
+.split {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: 4px 8px;
+}
+
+.ops-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .timeline {
@@ -407,7 +437,8 @@ tr:last-child td {
 
 .balance-bar {
   display: flex;
-  height: 8px;
+  width: 100%;
+  height: 7px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface-2);
@@ -478,7 +509,28 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 
-  .status-strip {
-    grid-template-columns: 1fr;
+  .summary-line {
+    align-items: flex-start;
+    display: grid;
+    gap: 6px;
+  }
+
+  .people-row {
+    grid-template-columns: minmax(0, 1fr) 72px;
+    gap: 6px 10px;
+  }
+
+  .table-head {
+    display: none;
+  }
+
+  .balance-cell,
+  .split,
+  .people-row > span:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .balance-cell {
+    max-width: none;
   }
 }

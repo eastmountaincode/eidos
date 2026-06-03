@@ -18,31 +18,30 @@ function render(data) {
 
   const run = data.latestRun || {};
   const conversations = data.topConversations || [];
+  const windowDays = run.window_days ?? 30;
   content.innerHTML = `
-    <section class="status-strip">
-      ${metric(run.total_messages ?? 0, `messages in last ${run.window_days ?? 30} days`)}
-      ${metric(run.conversation_count ?? conversations.length, "conversations")}
-      ${metric(run.last_message_at ? formatDate(run.last_message_at) : "none", "latest message")}
-      ${metric(run.exported_at ? formatDate(run.exported_at) : "not yet", "last ingest")}
+    <section class="summary-line" aria-label="Messages summary">
+      ${summaryFact(formatNumber(run.total_messages ?? 0), `${windowDays}d messages`)}
+      ${summaryFact(formatNumber(run.conversation_count ?? conversations.length), `${windowDays}d active conversations`)}
+      ${summaryFact(run.last_message_at ? formatDate(run.last_message_at) : "none", "latest")}
+      ${summaryFact(run.exported_at ? formatDate(run.exported_at) : "not yet", "ingested")}
+      ${summaryFact("not scheduled", "next ingest")}
     </section>
 
-    <section class="panel">
+    <section class="panel people-panel">
       <div class="panel-head">
-        <h3>People, last ${run.window_days ?? 30} days</h3>
+        <div>
+          <h3>People</h3>
+          <p class="muted">Last ${windowDays} days, sorted by message count.</p>
+        </div>
         ${badge(data.status || "pending")}
       </div>
       ${renderConversations(conversations)}
     </section>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h3>Ingest</h3>
-      </div>
-      <div class="list">
-        ${row("Storage", "Cloudflare D1")}
-        ${row("Source", run.source || "~/Library/Messages/chat.db")}
-        ${row("Next", "not scheduled yet")}
-      </div>
+    <section class="ops-line">
+      <span>Cloudflare D1</span>
+      <span>${escapeHtml(shortSource(run.source || "~/Library/Messages/chat.db"))}</span>
     </section>
   `;
 }
@@ -51,42 +50,49 @@ function renderConversations(conversations) {
   if (!conversations.length) {
     return `<p class="empty">No conversations ingested yet.</p>`;
   }
-  return `<div class="conversation-list">
+  return `<div class="people-table">
+    <div class="people-row table-head">
+      <span>Person</span>
+      <span>Messages</span>
+      <span>Balance</span>
+      <span>Split</span>
+      <span>Last active</span>
+    </div>
     ${conversations.map((item) => {
       const count = Number(item.message_count || 0);
       const sent = Number(item.sent_count || 0);
       const received = Number(item.received_count || 0);
       const sentPct = count ? Math.round((sent / count) * 100) : 0;
       const receivedPct = count ? 100 - sentPct : 0;
-      return `<article class="conversation-row">
-        <div class="row-head">
-          <span class="row-title">${escapeHtml(item.display_name || "Unknown")}</span>
-          <span class="row-subtitle">${escapeHtml(String(count))} messages</span>
+      return `<article class="people-row">
+        <span class="person-name">${escapeHtml(item.display_name || "Unknown")}</span>
+        <span>${formatNumber(count)}</span>
+        <div class="balance-cell">
+          <div class="balance-bar" aria-label="${sentPct}% from Andrew, ${receivedPct}% from them">
+            <span class="sent" style="width: ${sentPct}%"></span>
+            <span class="received" style="width: ${receivedPct}%"></span>
+          </div>
         </div>
-        <div class="balance-bar" aria-label="${sentPct}% from Andrew, ${receivedPct}% from them">
-          <span class="sent" style="width: ${sentPct}%"></span>
-          <span class="received" style="width: ${receivedPct}%"></span>
-        </div>
-        <div class="conversation-meta">
-          <span>${sent} sent</span>
-          <span>${received} received</span>
-          <span>${sentPct}% from Andrew</span>
-          <span>${item.last_active ? formatDate(item.last_active) : "no date"}</span>
-        </div>
+        <span class="split">
+          <span>${sent} you</span>
+          <span>${received} them</span>
+        </span>
+        <span>${item.last_active ? formatDate(item.last_active) : "no date"}</span>
       </article>`;
     }).join("")}
   </div>`;
 }
 
-function metric(value, label) {
-  return `<div class="metric"><strong>${escapeHtml(String(value))}</strong><span>${escapeHtml(label)}</span></div>`;
+function summaryFact(value, label) {
+  return `<div class="summary-fact"><strong>${escapeHtml(String(value))}</strong><span>${escapeHtml(label)}</span></div>`;
 }
 
-function row(title, detail) {
-  return `<div class="row">
-    <span class="row-title">${escapeHtml(title)}</span>
-    <p class="row-subtitle">${escapeHtml(detail)}</p>
-  </div>`;
+function shortSource(value) {
+  return String(value).replace(/^\/Users\/[^/]+/, "~");
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString();
 }
 
 function badge(status) {
