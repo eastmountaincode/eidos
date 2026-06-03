@@ -48,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=1)
     parser.add_argument("--preview", action="store_true", help="Print queued jobs without processing.")
     parser.add_argument("--codex-bin", default=default_codex_bin())
+    parser.add_argument("--codex-model", default=os.environ.get("EIDOS_SUMMARY_MODEL", "gpt-5.4-mini"))
     parser.add_argument("--workdir", default=str(eidos_home))
     return parser.parse_args()
 
@@ -210,6 +211,8 @@ Transcript:
                 "--skip-git-repo-check",
                 "--sandbox",
                 "read-only",
+                "--model",
+                args.codex_model,
                 "--output-schema",
                 str(schema_path),
                 "-o",
@@ -228,6 +231,7 @@ Transcript:
                 "error": "codex exec failed",
                 "returncode": result.returncode,
                 "codex_bin": args.codex_bin,
+                "model": args.codex_model,
                 "workdir": str(workdir),
                 "stdout_tail": (result.stdout or "").strip()[-1000:],
                 "stderr_tail": (result.stderr or "").strip()[-1000:],
@@ -256,7 +260,7 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]
             "summary": result.get("summary", ""),
             "themes": result.get("themes", []),
             "relationship_notes": result.get("relationship_notes", ""),
-            "model": "codex exec",
+            "model": f"codex exec {args.codex_model}",
             "error": None,
         }
     except Exception as exc:
