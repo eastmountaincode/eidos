@@ -1,6 +1,6 @@
 import { next } from '@vercel/functions';
 
-const PASSWORD = process.env.EIDOS_PORTAL_PASSWORD || 'Eidos';
+const PASSWORD = process.env.EIDOS_PORTAL_PASSWORD || 'eidos';
 const COOKIE_NAME = 'eidos_portal';
 const COOKIE_VALUE = process.env.EIDOS_PORTAL_SESSION_SECRET || 'local-session';
 
