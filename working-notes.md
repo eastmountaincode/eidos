@@ -51,6 +51,12 @@
 - Need: persist aliases/merges for people, handles, numbers, emails, and group chats after conversational correction.
 - Need: handle privacy, access permissions, sync freshness, and read-only ingestion carefully.
 
+## Storage
+
+- Want: use Cloudflare D1/R2 for durable state, not local JSON as the real storage model.
+- Use D1 for structured records; use R2 for larger blobs/artifacts/exports.
+- Local JSON is okay only as a temporary proof of access or adapter boundary.
+
 ## Daily History
 
 - Want: life-history notes grounded in meaningful events, text conversations, agent conversations, and things Andrew processed or got curious about.

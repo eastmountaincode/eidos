@@ -36,6 +36,14 @@ Raw sources are not memory.
 - profile memory stores durable facts/preferences/patterns
 - people memory stores person-specific relationship/context notes
 
+## Storage Architecture
+
+Prefer Cloudflare D1 and R2 over local JSON for durable state.
+
+- D1: structured/queryable records like messages, contacts, aliases, people, skills, sessions, history, and status rows
+- R2: larger blobs or artifacts like attachments, transcripts, exports, and archived source snapshots
+- local JSON is only acceptable as a short-lived bootstrap/export proof while building an adapter
+
 ## Not In First Build
 
 - email integration
@@ -43,4 +51,3 @@ Raw sources are not memory.
 - old Clawd task/research logs as active context
 - auto-routing between profiles
 - agent self-mythology/personhood framing
-

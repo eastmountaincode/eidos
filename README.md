@@ -4,6 +4,8 @@ Eidos is a fresh personal agent system for Andrew.
 
 It replaces the old Clawd/OpenClaw-shaped setup with a profile-aware agent, a new portal, explicit but not fully manual memory, searchable messages, daily history, people context, skills visibility, and grounded check-ins.
 
+Durable state should live in Cloudflare D1/R2. Local JSON is only for temporary bootstrap exports or adapter boundaries.
+
 First build target:
 
 - profile switching: personal, creative, bioinformatics
