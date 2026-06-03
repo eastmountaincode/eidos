@@ -17,15 +17,17 @@ Current first step:
 python3 ~/.eidos/services/messages/export_messages.py
 ```
 
-Private output:
+Default output:
 
-- `~/.eidos/data/messages/messages.json`
+- POST normalized message data to the Eidos Cloudflare Worker.
+- Worker writes current rolling-window message rows to D1.
 
-Portal-safe output:
+Optional debug outputs:
 
-- `~/.eidos/apps/portal/data/messages-status.json`
+- `--out /path/to/messages.json`
+- `--summary-out /path/to/messages-status.json`
 
-These JSON files are temporary proof-of-access exports. The intended durable storage is D1/R2.
+JSON files are temporary debug/proof-of-access exports only. The intended durable storage is D1/R2.
 
 Real contact overrides live at `~/.eidos/data/messages/contact-overrides.txt` and should not be committed.
 

@@ -3,7 +3,7 @@ const statusPill = document.querySelector("#status-pill");
 
 async function loadMessagesStatus() {
   try {
-    const response = await fetch("./data/messages-status.json", { cache: "no-store" });
+    const response = await fetch("/api/messages", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     render(await response.json());
   } catch (err) {
@@ -16,52 +16,62 @@ function render(data) {
   statusPill.textContent = active ? "Connected" : "Not connected";
   statusPill.className = active ? "runtime-pill" : "runtime-pill wait";
 
-  const stats = data.stats || {};
+  const run = data.latestRun || {};
+  const conversations = data.topConversations || [];
   content.innerHTML = `
-    <section class="metrics">
-      ${metric(stats.total_messages ?? 0, `messages in last ${data.window_days ?? 30} days`)}
-      ${metric(stats.conversation_count ?? 0, "conversations")}
-      ${metric(stats.last_message_at ? formatDate(stats.last_message_at) : "none", "latest message")}
+    <section class="status-strip">
+      ${metric(run.total_messages ?? 0, `messages in last ${run.window_days ?? 30} days`)}
+      ${metric(run.conversation_count ?? conversations.length, "conversations")}
+      ${metric(run.last_message_at ? formatDate(run.last_message_at) : "none", "latest message")}
+      ${metric(run.exported_at ? formatDate(run.exported_at) : "not yet", "last ingest")}
     </section>
 
     <section class="panel">
       <div class="panel-head">
-        <h3>Access</h3>
+        <h3>Most active people</h3>
         ${badge(data.status || "pending")}
       </div>
-      <div class="list">
-        ${row("Source", data.source || "~/Library/Messages/chat.db")}
-        ${row("Private export", data.private_data_path || "not created yet")}
-        ${row("Last export", data.exported_at ? formatDate(data.exported_at) : "not run yet")}
-        ${row("Policy", data.note || "Read-only. Message text stays on the Mac mini.")}
-      </div>
+      ${renderConversations(conversations)}
     </section>
 
     <section class="panel">
       <div class="panel-head">
-        <h3>Services</h3>
+        <h3>Ingest</h3>
       </div>
-      ${renderServices(stats.services_in_recent_export || {})}
+      <div class="list">
+        ${row("Storage", "Cloudflare D1")}
+        ${row("Source", run.source || "~/Library/Messages/chat.db")}
+        ${row("Next", "not scheduled yet")}
+      </div>
     </section>
   `;
 }
 
-function renderServices(services) {
-  const entries = Object.entries(services);
-  if (!entries.length) {
-    return `<p class="empty">No service counts yet.</p>`;
+function renderConversations(conversations) {
+  if (!conversations.length) {
+    return `<p class="empty">No conversations ingested yet.</p>`;
   }
-  const total = entries.reduce((sum, [, count]) => sum + Number(count || 0), 0) || 1;
-  return `<div class="service-list">
-    ${entries.map(([name, count]) => {
-      const pct = Math.round((Number(count || 0) / total) * 100);
-      return `<div class="service-row">
+  const max = Math.max(...conversations.map((item) => Number(item.message_count || 0)), 1);
+  return `<div class="conversation-list">
+    ${conversations.map((item) => {
+      const count = Number(item.message_count || 0);
+      const sent = Number(item.sent_count || 0);
+      const received = Number(item.received_count || 0);
+      const sentPct = count ? Math.round((sent / count) * 100) : 0;
+      const width = Math.max(4, Math.round((count / max) * 100));
+      return `<article class="conversation-row">
         <div class="row-head">
-          <span class="row-title">${escapeHtml(name || "unknown")}</span>
-          <span class="row-subtitle">${escapeHtml(String(count))}</span>
+          <span class="row-title">${escapeHtml(item.display_name || "Unknown")}</span>
+          <span class="row-subtitle">${escapeHtml(String(count))} messages</span>
         </div>
-        <div class="bar"><span style="width: ${pct}%"></span></div>
-      </div>`;
+        <div class="bar"><span style="width: ${width}%"></span></div>
+        <div class="conversation-meta">
+          <span>${sent} sent</span>
+          <span>${received} received</span>
+          <span>${sentPct}% from Andrew</span>
+          <span>${item.last_active ? formatDate(item.last_active) : "no date"}</span>
+        </div>
+      </article>`;
     }).join("")}
   </div>`;
 }
@@ -97,17 +107,16 @@ function formatDate(value) {
 function fallbackStatus(error) {
   return {
     status: "pending",
-    source: "~/Library/Messages/chat.db",
-    private_data_path: "not created yet",
-    window_days: 30,
-    exported_at: null,
-    stats: {
+    latestRun: {
       total_messages: 0,
       conversation_count: 0,
       last_message_at: null,
-      services_in_recent_export: {},
+      exported_at: null,
+      window_days: 30,
+      source: "~/Library/Messages/chat.db",
     },
-    note: `Messages status unavailable: ${error}`,
+    topConversations: [],
+    error,
   };
 }
 

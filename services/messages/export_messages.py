@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only iMessage/SMS export for Eidos.
+"""Read-only iMessage/SMS ingest for Eidos.
 
-Writes private message data to ~/.eidos/data/messages/messages.json by default.
-Also writes a sanitized portal status JSON without message text.
+Reads chat.db locally and posts normalized message data to the Eidos D1 API.
+Optional JSON outputs are for debugging only.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ import json
 import os
 import re
 import sqlite3
+import urllib.error
+import urllib.request
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,9 +33,11 @@ def parse_args() -> argparse.Namespace:
 def build_parser(home: Path, eidos_home: Path) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--chat-db", default=str(home / "Library/Messages/chat.db"))
-    parser.add_argument("--out", default=str(eidos_home / "data/messages/messages.json"))
-    parser.add_argument("--summary-out", default=str(eidos_home / "apps/portal/data/messages-status.json"))
+    parser.add_argument("--out", default="")
+    parser.add_argument("--summary-out", default="")
     parser.add_argument("--overrides", default=str(eidos_home / "data/messages/contact-overrides.txt"))
+    parser.add_argument("--api-url", default=os.environ.get("EIDOS_WORKER_URL", ""))
+    parser.add_argument("--api-token", default=os.environ.get("EIDOS_API_TOKEN", ""))
     parser.add_argument("--days", type=int, default=30)
     parser.add_argument("--recent-limit", type=int, default=200)
     parser.add_argument("--preview-len", type=int, default=240)
@@ -152,8 +156,8 @@ def connect_readonly(path: Path) -> sqlite3.Connection:
 
 def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any]]:
     chat_db = Path(args.chat_db).expanduser()
-    out_path = Path(args.out).expanduser()
-    summary_path = Path(args.summary_out).expanduser()
+    out_path = Path(args.out).expanduser() if args.out else None
+    summary_path = Path(args.summary_out).expanduser() if args.summary_out else None
     overrides_path = Path(args.overrides).expanduser()
 
     if not chat_db.exists():
@@ -188,7 +192,7 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
 
     stat_rows = conn.execute("""
         SELECT
-            COALESCE(h.id, CASE WHEN c.style = 43 THEN c.chat_identifier ELSE h.id END, c.chat_identifier, 'Unknown') AS handle,
+            CASE WHEN c.style = 43 THEN COALESCE(c.chat_identifier, c.display_name, 'Unknown') ELSE COALESCE(h.id, c.chat_identifier, 'Unknown') END AS handle,
             COALESCE(c.display_name, '') AS group_name,
             COALESCE(m.service, h.service, '') AS service,
             CASE WHEN c.style = 43 THEN 'group' ELSE 'direct' END AS chat_type,
@@ -202,7 +206,8 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
         LEFT JOIN chat c ON cmj.chat_id = c.ROWID
         WHERE (m.text IS NOT NULL AND m.text != '' OR m.attributedBody IS NOT NULL)
           AND m.date > ?
-        GROUP BY COALESCE(h.id, c.chat_identifier, 'Unknown'), COALESCE(c.display_name, '')
+        GROUP BY CASE WHEN c.style = 43 THEN COALESCE(c.chat_identifier, c.display_name, 'Unknown') ELSE COALESCE(h.id, c.chat_identifier, 'Unknown') END,
+                 COALESCE(c.display_name, '')
         ORDER BY message_count DESC
         LIMIT 50
     """, (cutoff,)).fetchall()
@@ -276,7 +281,6 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
         "exported_at": exported_at,
         "status": "active",
         "source": "~/Library/Messages/chat.db",
-        "private_data_path": str(out_path),
         "window_days": args.days,
         "stats": {
             "total_messages": private_payload["stats"]["total_messages"],
@@ -286,15 +290,43 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
             "conversation_count": private_payload["stats"]["conversation_count"],
             "services_in_recent_export": dict(service_counts),
         },
-        "note": "Sanitized status only. Message text and handles stay on the Mac mini.",
+        "note": "Messages are read locally on the Mac mini and written to D1.",
     }
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(private_payload, indent=2, ensure_ascii=False))
-    os.chmod(out_path, 0o600)
-    summary_path.write_text(json.dumps(summary_payload, indent=2, ensure_ascii=False))
+    if args.api_url and args.api_token:
+        post_to_api(args.api_url, args.api_token, private_payload)
+
+    if out_path:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(private_payload, indent=2, ensure_ascii=False))
+        os.chmod(out_path, 0o600)
+
+    if summary_path:
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text(json.dumps(summary_payload, indent=2, ensure_ascii=False))
+
     return private_payload, summary_payload
+
+
+def post_to_api(api_url: str, token: str, payload: dict[str, Any]) -> None:
+    url = api_url.rstrip("/") + "/api/messages/ingest"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "Eidos/0.1",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            if response.status >= 300:
+                raise RuntimeError(f"API returned HTTP {response.status}")
+    except urllib.error.HTTPError as err:
+        detail = err.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"API returned HTTP {err.code}: {detail}") from err
 
 
 def main() -> None:
@@ -306,6 +338,7 @@ def main() -> None:
         "conversation_count": summary_payload["stats"]["conversation_count"],
         "last_message_at": summary_payload["stats"]["last_message_at"],
         "recent_messages_exported": len(private_payload["recent_messages"]),
+        "storage": "d1" if os.environ.get("EIDOS_WORKER_URL") else "local-only",
     }, indent=2))
 
 
