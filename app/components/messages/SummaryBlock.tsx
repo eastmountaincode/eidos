@@ -26,7 +26,10 @@ export function SummaryBlock({ summary }: { summary: ConversationSummary | null 
 
   return (
     <section className="grid gap-2 border-t border-border pt-3">
-      <h4 className="text-xs font-bold">Summary</h4>
+      <div className="grid gap-0.5">
+        <h4 className="text-xs font-bold">Summary</h4>
+        <p className="text-[11px] text-muted">{summaryMetadata(summary)}</p>
+      </div>
       <p className="text-xs text-muted">{summary.summary || "No summary text."}</p>
       <Themes themes={summary.themes || []} />
       {summary.relationship_notes ? (
@@ -40,14 +43,13 @@ export function SummaryBlock({ summary }: { summary: ConversationSummary | null 
 }
 
 export function summaryStatus(summary: ConversationSummary) {
-  const label = summaryWindowLabel(summary.window_type);
   if (summary.status === "completed") {
-    return `${label} summary generated ${formatDate(summary.generated_at)}.`;
+    return summaryMetadata(summary);
   }
   if (summary.status === "failed") {
-    return `${label} summary failed.`;
+    return `${summaryWindowLabel(summary.window_type)} summary failed.`;
   }
-  return `${label} summary is ${summary.status}.`;
+  return `${summaryWindowLabel(summary.window_type)} summary is ${summary.status}.`;
 }
 
 function Themes({ themes }: { themes: string[] }) {
@@ -73,6 +75,24 @@ function SummaryProgress({ status }: { status: "queued" | "running" }) {
       <span>{message}</span>
     </div>
   );
+}
+
+function summaryMetadata(summary: ConversationSummary) {
+  const parts = [
+    summary.generated_at ? `Generated ${formatDate(summary.generated_at)}` : "Generated time unavailable",
+    summaryCorpusLabel(summary),
+  ];
+  return parts.filter(Boolean).join(" | ");
+}
+
+function summaryCorpusLabel(summary: ConversationSummary) {
+  const corpus = summaryWindowLabel(summary.window_type);
+  const count = summary.message_count ? `${summary.message_count.toLocaleString()} messages` : "";
+  const range = summary.source_start_at && summary.source_end_at
+    ? `${formatDate(summary.source_start_at)} to ${formatDate(summary.source_end_at)}`
+    : "";
+
+  return [corpus, count, range].filter(Boolean).join(" | ");
 }
 
 function summarizeError(error?: string | null) {
