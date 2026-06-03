@@ -38,6 +38,25 @@ export default {
       return getMessagesOverview(env);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/messages/conversation') {
+      return getConversationDetail(env, url);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/messages/summary-request') {
+      const payload = await request.json();
+      return requestSummary(env, payload);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/messages/summary-jobs') {
+      return getSummaryJobs(env, url);
+    }
+
+    const completeMatch = url.pathname.match(/^\/api\/messages\/summary-jobs\/([^/]+)$/);
+    if (request.method === 'POST' && completeMatch) {
+      const payload = await request.json();
+      return completeSummaryJob(env, completeMatch[1], payload);
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/messages/ingest') {
       const payload = await request.json();
       return ingestMessages(env, payload);
@@ -73,6 +92,207 @@ async function getMessagesOverview(env) {
     latestRun,
     topConversations: top.results,
   });
+}
+
+async function getConversationDetail(env, url) {
+  const conversationKey = url.searchParams.get('conversation_key') || '';
+  if (!conversationKey) {
+    return json({ error: 'missing conversation_key' }, 400);
+  }
+
+  const conversation = await env.DB.prepare(`
+    SELECT
+      conversation_key,
+      display_name,
+      handle,
+      chat_type,
+      message_count,
+      sent_count,
+      received_count,
+      last_active
+    FROM message_conversations
+    WHERE conversation_key = ?
+  `).bind(conversationKey).first();
+
+  if (!conversation) {
+    return json({ error: 'conversation not found' }, 404);
+  }
+
+  const recent = await env.DB.prepare(`
+    SELECT timestamp, direction, chat_type, body
+    FROM message_items
+    WHERE conversation_key = ?
+    ORDER BY timestamp DESC
+    LIMIT 20
+  `).bind(conversationKey).all();
+
+  const summaries = await env.DB.prepare(`
+    SELECT
+      id,
+      conversation_key,
+      display_name,
+      window_type,
+      window_days,
+      message_limit,
+      status,
+      requested_at,
+      started_at,
+      generated_at,
+      message_count,
+      source_start_at,
+      source_end_at,
+      summary,
+      themes_json,
+      relationship_notes,
+      model,
+      error,
+      updated_at
+    FROM conversation_summaries
+    WHERE conversation_key = ?
+    ORDER BY requested_at DESC
+    LIMIT 8
+  `).bind(conversationKey).all();
+
+  return json({
+    conversation,
+    recentMessages: recent.results,
+    summaries: summaries.results.map(normalizeSummary),
+  });
+}
+
+async function requestSummary(env, payload) {
+  const conversationKey = String(payload.conversation_key || '');
+  if (!conversationKey) {
+    return json({ error: 'missing conversation_key' }, 400);
+  }
+
+  const windowType = normalizeWindowType(payload.window_type || 'week');
+  const windowConfig = windowForType(windowType);
+  const conversation = await env.DB.prepare(`
+    SELECT conversation_key, display_name
+    FROM message_conversations
+    WHERE conversation_key = ?
+  `).bind(conversationKey).first();
+
+  if (!conversation) {
+    return json({ error: 'conversation not found' }, 404);
+  }
+
+  const existing = await env.DB.prepare(`
+    SELECT *
+    FROM conversation_summaries
+    WHERE conversation_key = ?
+      AND window_type = ?
+      AND status IN ('queued', 'running')
+    ORDER BY requested_at DESC
+    LIMIT 1
+  `).bind(conversationKey, windowType).first();
+
+  if (existing) {
+    return json({ summary: normalizeSummary(existing), reused: true }, 202);
+  }
+
+  const id = crypto.randomUUID();
+  await env.DB.prepare(`
+    INSERT INTO conversation_summaries (
+      id, conversation_key, display_name, window_type, window_days, message_limit,
+      status, requested_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'queued', datetime('now'), datetime('now'))
+  `).bind(
+    id,
+    conversation.conversation_key,
+    conversation.display_name,
+    windowType,
+    windowConfig.windowDays,
+    windowConfig.messageLimit,
+  ).run();
+
+  const summary = await env.DB.prepare(`
+    SELECT *
+    FROM conversation_summaries
+    WHERE id = ?
+  `).bind(id).first();
+
+  return json({ summary: normalizeSummary(summary), reused: false }, 202);
+}
+
+async function getSummaryJobs(env, url) {
+  const status = url.searchParams.get('status') || 'queued';
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 5), 1), 20);
+
+  const jobs = await env.DB.prepare(`
+    SELECT
+      s.id,
+      s.conversation_key,
+      s.display_name,
+      c.handle,
+      c.chat_type,
+      s.window_type,
+      s.window_days,
+      s.message_limit,
+      s.status,
+      s.requested_at
+    FROM conversation_summaries s
+    LEFT JOIN message_conversations c ON c.conversation_key = s.conversation_key
+    WHERE s.status = ?
+    ORDER BY s.requested_at ASC
+    LIMIT ?
+  `).bind(status, limit).all();
+
+  return json({ jobs: jobs.results });
+}
+
+async function completeSummaryJob(env, id, payload) {
+  const status = payload.status === 'failed' ? 'failed' : 'completed';
+  const themesJson = payload.themes_json
+    ? JSON.stringify(payload.themes_json)
+    : payload.themes
+      ? JSON.stringify(payload.themes)
+      : null;
+
+  await env.DB.prepare(`
+    UPDATE conversation_summaries
+    SET
+      status = ?,
+      started_at = COALESCE(started_at, ?),
+      generated_at = CASE WHEN ? = 'completed' THEN COALESCE(?, datetime('now')) ELSE generated_at END,
+      message_count = COALESCE(?, message_count),
+      source_start_at = COALESCE(?, source_start_at),
+      source_end_at = COALESCE(?, source_end_at),
+      summary = COALESCE(?, summary),
+      themes_json = COALESCE(?, themes_json),
+      relationship_notes = COALESCE(?, relationship_notes),
+      model = COALESCE(?, model),
+      error = ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    status,
+    payload.started_at || null,
+    status,
+    payload.generated_at || null,
+    payload.message_count ?? null,
+    payload.source_start_at || null,
+    payload.source_end_at || null,
+    payload.summary || null,
+    themesJson,
+    payload.relationship_notes || null,
+    payload.model || null,
+    payload.error || null,
+    id,
+  ).run();
+
+  const summary = await env.DB.prepare(`
+    SELECT *
+    FROM conversation_summaries
+    WHERE id = ?
+  `).bind(id).first();
+
+  if (!summary) {
+    return json({ error: 'summary job not found' }, 404);
+  }
+
+  return json({ summary: normalizeSummary(summary) });
 }
 
 async function ingestMessages(env, payload) {
@@ -177,4 +397,33 @@ async function ingestMessages(env, payload) {
     conversations: conversations.length,
     recentMessages: recentMessages.length,
   }, 201);
+}
+
+function normalizeWindowType(value) {
+  const allowed = new Set(['week', 'two_weeks', 'month', 'last_100']);
+  return allowed.has(value) ? value : 'week';
+}
+
+function windowForType(value) {
+  if (value === 'two_weeks') return { windowDays: 14, messageLimit: null };
+  if (value === 'month') return { windowDays: 30, messageLimit: null };
+  if (value === 'last_100') return { windowDays: null, messageLimit: 100 };
+  return { windowDays: 7, messageLimit: null };
+}
+
+function normalizeSummary(summary) {
+  if (!summary) return null;
+  return {
+    ...summary,
+    themes: parseJson(summary.themes_json, []),
+  };
+}
+
+function parseJson(value, fallback) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
 }

@@ -31,6 +31,14 @@ JSON files are temporary debug/proof-of-access exports only. The intended durabl
 
 Real contact overrides live at `~/.eidos/data/messages/contact-overrides.txt` and should not be committed.
 
+On-demand summaries:
+
+```sh
+python3 ~/.eidos/services/messages/process_summary_jobs.py
+```
+
+The portal queues a summary request in D1. The Mac mini processor reads queued jobs, extracts the requested conversation window from local `chat.db`, runs `codex exec`, and writes the completed summary back to D1. This is intentionally separate from ingest so summaries are generated only when requested.
+
 Known hard parts:
 
 - phone/email/handle/group-chat identity resolution

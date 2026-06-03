@@ -37,3 +37,29 @@ CREATE TABLE IF NOT EXISTS message_items (
 CREATE INDEX IF NOT EXISTS idx_message_items_conversation_time ON message_items(conversation_key, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_message_items_timestamp ON message_items(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_message_conversations_count ON message_conversations(message_count DESC);
+
+CREATE TABLE IF NOT EXISTS conversation_summaries (
+  id TEXT PRIMARY KEY,
+  conversation_key TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  window_type TEXT NOT NULL,
+  window_days INTEGER,
+  message_limit INTEGER,
+  status TEXT NOT NULL DEFAULT 'queued',
+  requested_at TEXT DEFAULT (datetime('now')),
+  started_at TEXT,
+  generated_at TEXT,
+  message_count INTEGER DEFAULT 0,
+  source_start_at TEXT,
+  source_end_at TEXT,
+  summary TEXT,
+  themes_json TEXT,
+  relationship_notes TEXT,
+  model TEXT,
+  error TEXT,
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (conversation_key) REFERENCES message_conversations(conversation_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_summaries_conversation ON conversation_summaries(conversation_key, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversation_summaries_status ON conversation_summaries(status, requested_at);

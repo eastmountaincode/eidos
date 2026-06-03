@@ -200,6 +200,13 @@ select {
   gap: 10px;
 }
 
+.messages-grid {
+  display: grid;
+  grid-template-columns: minmax(620px, 1fr) minmax(320px, 380px);
+  gap: 10px;
+  align-items: start;
+}
+
 .section-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -344,10 +351,24 @@ select {
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
+  outline: none;
 }
 
 .people-row:last-child {
   border-bottom: 0;
+}
+
+.people-row[role="button"] {
+  cursor: pointer;
+}
+
+.people-row[role="button"]:hover,
+.people-row.selected {
+  background: #f4f8f7;
+}
+
+.people-row[role="button"]:focus-visible {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .table-head {
@@ -389,6 +410,112 @@ select {
   gap: 8px 16px;
   color: var(--muted);
   font-size: 11px;
+}
+
+.detail-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-empty {
+  display: grid;
+  gap: 4px;
+}
+
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.detail-head h3 {
+  font-size: 15px;
+}
+
+.summary-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.summary-controls select {
+  min-width: 0;
+  flex: 1;
+  padding: 6px 8px;
+}
+
+.summary-controls button {
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.summary-controls button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.detail-block {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.detail-block h4 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.detail-block p,
+.detail-block li {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.themes {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.message-preview-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.message-preview {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fafcfc;
+}
+
+.message-preview > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--soft);
+  font-size: 11px;
+}
+
+.message-preview strong {
+  color: var(--ink);
+}
+
+.message-preview p {
+  color: var(--ink);
+  font-size: 12px;
 }
 
 .timeline {
@@ -499,6 +626,10 @@ tr:last-child td {
   }
 
   .section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .messages-grid {
     grid-template-columns: 1fr;
   }
 
