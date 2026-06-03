@@ -336,7 +336,7 @@ select {
 
 .people-row {
   display: grid;
-  grid-template-columns: minmax(150px, 2fr) 82px minmax(110px, 150px) minmax(130px, 1fr) 120px;
+  grid-template-columns: 34px minmax(150px, 2fr) 82px minmax(110px, 150px) minmax(130px, 1fr) 120px;
   gap: 12px;
   align-items: center;
   min-height: 34px;
@@ -365,6 +365,12 @@ select {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rank {
+  color: var(--soft);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 .balance-cell {
@@ -516,7 +522,7 @@ tr:last-child td {
   }
 
   .people-row {
-    grid-template-columns: minmax(0, 1fr) 72px;
+    grid-template-columns: 30px minmax(0, 1fr) 72px;
     gap: 6px 10px;
   }
 
@@ -527,7 +533,7 @@ tr:last-child td {
   .balance-cell,
   .split,
   .people-row > span:last-child {
-    grid-column: 1 / -1;
+    grid-column: 2 / -1;
   }
 
   .balance-cell {

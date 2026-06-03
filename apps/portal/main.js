@@ -52,19 +52,21 @@ function renderConversations(conversations) {
   }
   return `<div class="people-table">
     <div class="people-row table-head">
+      <span>#</span>
       <span>Person</span>
       <span>Messages</span>
       <span>Balance</span>
       <span>Split</span>
       <span>Last active</span>
     </div>
-    ${conversations.map((item) => {
+    ${conversations.map((item, index) => {
       const count = Number(item.message_count || 0);
       const sent = Number(item.sent_count || 0);
       const received = Number(item.received_count || 0);
       const sentPct = count ? Math.round((sent / count) * 100) : 0;
       const receivedPct = count ? 100 - sentPct : 0;
       return `<article class="people-row">
+        <span class="rank">${index + 1}</span>
         <span class="person-name">${escapeHtml(item.display_name || "Unknown")}</span>
         <span>${formatNumber(count)}</span>
         <div class="balance-cell">
