@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sqlite3
 from collections import Counter
@@ -291,6 +292,7 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
     out_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(private_payload, indent=2, ensure_ascii=False))
+    os.chmod(out_path, 0o600)
     summary_path.write_text(json.dumps(summary_payload, indent=2, ensure_ascii=False))
     return private_payload, summary_payload
 
