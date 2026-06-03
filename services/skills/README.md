@@ -19,3 +19,11 @@ Each skill should have:
 - last tested timestamp
 - status: ready, needs_test, broken, planned
 
+Initial Telegram inventory:
+
+- `telegram-chat`: active
+- `file-intake`: active
+- `messages-ingest`: planned
+- `calendar-checkins`: planned
+- `meeting-transcription`: planned
+- `playlist-from-image`: planned

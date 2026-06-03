@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>ai.eidos.gateway</string>
+    <key>Comment</key>
+    <string>Eidos Telegram Gateway</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>WorkingDirectory</key>
+    <string>/Users/oasis/.eidos/services/telegram</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/opt/homebrew/bin/node</string>
+      <string>--require</string>
+      <string>/Users/oasis/.eidos/services/telegram/node_modules/tsx/dist/preflight.cjs</string>
+      <string>--import</string>
+      <string>file:///Users/oasis/.eidos/services/telegram/node_modules/tsx/dist/loader.mjs</string>
+      <string>/Users/oasis/.eidos/services/telegram/src/index.ts</string>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/oasis/.eidos/logs/telegram.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/oasis/.eidos/logs/telegram.err.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>HOME</key>
+      <string>/Users/oasis</string>
+      <key>EIDOS_HOME</key>
+      <string>/Users/oasis/.eidos</string>
+      <key>PATH</key>
+      <string>/Users/oasis/.local/bin:/Users/oasis/.npm-global/bin:/Users/oasis/bin:/Users/oasis/.volta/bin:/Users/oasis/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+      <key>NODE_EXTRA_CA_CERTS</key>
+      <string>/etc/ssl/cert.pem</string>
+    </dict>
+  </dict>
+</plist>

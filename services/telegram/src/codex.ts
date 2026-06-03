@@ -1,0 +1,190 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { config, profiles, type ProfileName } from './config.js';
+import { buildPrompt } from './context.js';
+
+export type AgentResponse = {
+  text: string;
+  sessionId: string;
+  error?: string;
+};
+
+export type StreamCallback = (partialText: string) => Promise<void> | void;
+
+type CodexJsonEvent = {
+  type?: string;
+  thread_id?: string;
+  item?: {
+    type?: string;
+    text?: string;
+  };
+  message?: string;
+};
+
+const activeQueries = new Map<string, ChildProcessWithoutNullStreams>();
+
+export function abortAllQueries(): void {
+  for (const [key, child] of activeQueries) {
+    child.kill('SIGTERM');
+    activeQueries.delete(key);
+  }
+}
+
+export function codexStatus(profile: ProfileName): string {
+  return [
+    'Provider: Codex CLI',
+    `Model: ${config.codex.model ?? 'CLI default'}`,
+    `Command: ${config.codex.binary}`,
+    `Workspace: ${config.workspacePath}`,
+    `Active profile: ${profile} (${profiles[profile].label})`,
+  ].join('\n');
+}
+
+export async function sendMessage(
+  prompt: string,
+  opts: {
+    profile: ProfileName;
+    resumeSessionId?: string;
+    onPartialText?: StreamCallback;
+  },
+): Promise<AgentResponse> {
+  const queryKey = `${Date.now()}-${Math.random()}`;
+
+  try {
+    return await runCodex(prompt, opts, queryKey);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes('429') || errMsg.includes('ECONNRESET') || errMsg.includes('ETIMEDOUT')) {
+      console.log(`[codex] Transient error, retrying in 5s: ${errMsg}`);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      return runCodex(prompt, opts, `${queryKey}-retry`);
+    }
+    return { text: '', sessionId: opts.resumeSessionId ?? '', error: errMsg };
+  }
+}
+
+async function runCodex(
+  prompt: string,
+  opts: {
+    profile: ProfileName;
+    resumeSessionId?: string;
+    onPartialText?: StreamCallback;
+  },
+  queryKey: string,
+): Promise<AgentResponse> {
+  const args = buildArgs(opts.resumeSessionId);
+  const child = spawn(config.codex.binary, args, {
+    cwd: config.workspacePath,
+    env: {
+      ...process.env,
+      HOME: process.env.HOME ?? '/Users/oasis',
+      PATH: config.codex.path,
+    },
+  });
+
+  activeQueries.set(queryKey, child);
+
+  let stdout = '';
+  let stderr = '';
+  let sessionId = opts.resumeSessionId ?? '';
+  let fullText = '';
+
+  child.stdout.on('data', async (chunk: Buffer) => {
+    stdout += chunk.toString('utf8');
+    const lines = stdout.split('\n');
+    stdout = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const event = parseEvent(line);
+      if (!event) continue;
+
+      if (event.type === 'thread.started' && event.thread_id) {
+        sessionId = event.thread_id;
+      }
+
+      if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
+        fullText = event.item.text ?? fullText;
+        if (event.item.text && opts.onPartialText) {
+          try {
+            await opts.onPartialText(event.item.text);
+          } catch {
+            // Telegram edit failures are non-critical.
+          }
+        }
+      }
+
+      if (event.type === 'error' && event.message) {
+        stderr += `${event.message}\n`;
+      }
+    }
+  });
+
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString('utf8');
+  });
+
+  child.on('error', (err) => {
+    stderr += `${err.message}\n`;
+  });
+
+  child.stdin.write(buildPrompt(prompt, opts.profile));
+  child.stdin.end();
+
+  const exitCode = await waitForExit(child);
+  activeQueries.delete(queryKey);
+
+  if (stdout.trim()) {
+    const event = parseEvent(stdout.trim());
+    if (event?.type === 'item.completed' && event.item?.type === 'agent_message') {
+      fullText = event.item.text ?? fullText;
+    }
+  }
+
+  if (exitCode !== 0) {
+    const error = summarizeError(stderr) || `Codex exited with code ${exitCode}`;
+    return { text: fullText, sessionId, error };
+  }
+
+  return { text: fullText, sessionId };
+}
+
+function buildArgs(resumeSessionId?: string): string[] {
+  const common = [
+    '--json',
+    '--skip-git-repo-check',
+    '--dangerously-bypass-approvals-and-sandbox',
+  ];
+
+  if (config.codex.model) {
+    common.push('--model', config.codex.model);
+  }
+
+  if (resumeSessionId) {
+    return ['exec', 'resume', ...common, resumeSessionId, '-'];
+  }
+
+  return ['exec', ...common, '--cd', config.workspacePath, '-'];
+}
+
+function parseEvent(line: string): CodexJsonEvent | undefined {
+  try {
+    return JSON.parse(line) as CodexJsonEvent;
+  } catch {
+    return undefined;
+  }
+}
+
+function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
+  return new Promise((resolve) => {
+    child.on('error', () => resolve(1));
+    child.on('close', (code) => resolve(code));
+  });
+}
+
+function summarizeError(stderr: string): string {
+  return stderr
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-8)
+    .join('\n');
+}

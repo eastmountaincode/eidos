@@ -7,6 +7,7 @@ It replaces the old Clawd/OpenClaw-shaped setup with a profile-aware agent, a ne
 First build target:
 
 - profile switching: personal, creative, bioinformatics
+- Telegram gateway for direct conversation with Eidos
 - iMessage/SMS ingest and recall
 - people/contact resolution with conversational correction
 - daily history grounded in meaningful events and conversations
@@ -19,4 +20,3 @@ Deferred:
 - email integration
 - automatic profile routing
 - old-note migration beyond read-only archive/search
-
