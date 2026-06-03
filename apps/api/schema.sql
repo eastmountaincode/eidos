@@ -75,3 +75,112 @@ CREATE TABLE IF NOT EXISTS conversation_summaries (
 
 CREATE INDEX IF NOT EXISTS idx_conversation_summaries_conversation ON conversation_summaries(conversation_key, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_conversation_summaries_status ON conversation_summaries(status, requested_at);
+
+CREATE TABLE IF NOT EXISTS agent_capabilities (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('tool', 'skill')),
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'planned',
+  category TEXT,
+  summary TEXT NOT NULL,
+  invocation TEXT,
+  data_source TEXT,
+  notes TEXT,
+  sort_order INTEGER DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_capabilities_kind ON agent_capabilities(kind, sort_order, name);
+
+INSERT INTO agent_capabilities (
+  id, kind, name, status, category, summary, invocation, data_source, notes, sort_order, updated_at
+) VALUES
+  (
+    'message-context',
+    'tool',
+    'Message context',
+    'active',
+    'Messages',
+    'Fetches D1-backed iMessage/SMS context for a person when the agent needs message evidence.',
+    'python3 ~/.eidos/services/messages/message_context.py --person "NAME" --limit 25',
+    'Cloudflare D1: message_conversations, message_items, conversation_summaries',
+    'Use intentionally when Andrew asks to pull texts/messages, is processing an interaction, or recent message evidence would prevent guessing.',
+    10,
+    datetime('now')
+  ),
+  (
+    'telegram-chat',
+    'skill',
+    'Telegram chat',
+    'active',
+    'Interface',
+    'Talk to Eidos from Telegram with profile-aware Codex sessions.',
+    NULL,
+    NULL,
+    'Primary conversational interface.',
+    100,
+    datetime('now')
+  ),
+  (
+    'file-intake',
+    'skill',
+    'File intake',
+    'active',
+    'Interface',
+    'Accepts forwarded Telegram photos, voice notes, and documents as local files for the agent.',
+    NULL,
+    NULL,
+    'Useful for image review, document work, and future transcription workflows.',
+    110,
+    datetime('now')
+  ),
+  (
+    'calendar-checkins',
+    'skill',
+    'Calendar check-ins',
+    'planned',
+    'Check-ins',
+    'Morning and evening check-ins grounded in calendar and message context.',
+    NULL,
+    NULL,
+    'Not built yet.',
+    200,
+    datetime('now')
+  ),
+  (
+    'meeting-transcription',
+    'skill',
+    'Meeting transcription',
+    'planned',
+    'Media',
+    'Transcribe meeting files and extract action-relevant notes.',
+    NULL,
+    NULL,
+    'Not built yet.',
+    210,
+    datetime('now')
+  ),
+  (
+    'playlist-from-image',
+    'skill',
+    'Playlist from image',
+    'planned',
+    'Music',
+    'Turn an image or vibe board into an Apple Music playlist.',
+    NULL,
+    NULL,
+    'Not built yet.',
+    220,
+    datetime('now')
+  )
+ON CONFLICT(id) DO UPDATE SET
+  kind = excluded.kind,
+  name = excluded.name,
+  status = excluded.status,
+  category = excluded.category,
+  summary = excluded.summary,
+  invocation = excluded.invocation,
+  data_source = excluded.data_source,
+  notes = excluded.notes,
+  sort_order = excluded.sort_order,
+  updated_at = datetime('now');

@@ -1,3 +1,4 @@
+import type { CapabilitiesResponse } from "@/types/capabilities";
 import type { ConversationDetail, MessageIngestRequest, MessagesOverview, SummaryWindow } from "@/types/messages";
 
 function workerBaseUrl() {
@@ -32,6 +33,10 @@ async function workerFetch<T>(path: string, init: RequestInit = {}): Promise<T> 
 
 export function getMessagesOverview() {
   return workerFetch<MessagesOverview>("/api/messages/overview");
+}
+
+export function getCapabilities() {
+  return workerFetch<CapabilitiesResponse>("/api/capabilities");
 }
 
 export function requestMessagesIngest() {

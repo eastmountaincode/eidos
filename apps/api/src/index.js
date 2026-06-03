@@ -38,6 +38,10 @@ export default {
       return getMessagesOverview(env);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/capabilities') {
+      return getCapabilities(env);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/messages/conversations') {
       return getMessageConversations(env, url);
     }
@@ -83,6 +87,27 @@ export default {
     return json({ error: 'not found' }, 404);
   },
 };
+
+async function getCapabilities(env) {
+  const capabilities = await env.DB.prepare(`
+    SELECT
+      id,
+      kind,
+      name,
+      status,
+      category,
+      summary,
+      invocation,
+      data_source,
+      notes,
+      sort_order,
+      updated_at
+    FROM agent_capabilities
+    ORDER BY kind ASC, sort_order ASC, name ASC
+  `).all();
+
+  return json({ capabilities: capabilities.results });
+}
 
 async function getMessagesOverview(env) {
   const latestRun = await env.DB.prepare(`
