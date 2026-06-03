@@ -187,12 +187,12 @@ def run_codex(args: argparse.Namespace, job: dict[str, Any], messages: list[dict
 Conversation: {job.get('display_name') or job.get('conversation_key')}
 Window: {job.get('window_type')}
 
-Return:
-- a concise recent thread summary
-- 3 to 7 themes
-- relationship notes only if useful; otherwise an empty string
+Use the fields this way:
+- summary: 3 to 6 sentences about what happened, what the conversation was circling around, and anything Andrew may want to remember.
+- themes: 3 to 7 short phrases covering concrete topics, tone, recurring patterns, or notable shifts. Mix topic labels and tone/pattern labels when useful.
+- relationship_notes: optional notes about rapport, energy, tension, closeness, distance, logistics, or context Andrew may care about. Leave empty if the transcript does not support a useful note.
 
-Do not moralize. Do not include private message quotes unless a short phrase is necessary.
+Be grounded in the messages. Do not moralize, diagnose, or over-interpret. Do not include private message quotes unless a short phrase is necessary. If the transcript is thin, say that plainly rather than inventing themes.
 
 Transcript:
 {transcript}
