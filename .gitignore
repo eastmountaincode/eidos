@@ -1,0 +1,15 @@
+# macOS/external volume metadata
+._*
+.DS_Store
+
+# Local/runtime files
+node_modules/
+.env
+.env.*
+*.log
+
+# Build outputs
+dist/
+build/
+.next/
+coverage/

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EidosHistoryEvent",
+  "type": "object",
+  "required": ["id", "profile", "date", "title", "summary", "sources"],
+  "properties": {
+    "id": { "type": "string" },
+    "profile": { "type": "string", "enum": ["personal", "creative", "bioinformatics"] },
+    "date": { "type": "string" },
+    "title": { "type": "string" },
+    "summary": { "type": "string" },
+    "people": { "type": "array", "items": { "type": "string" } },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["messages", "agent_session", "calendar", "manual", "file"] }
+    }
+  }
+}
+

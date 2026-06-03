@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EidosProfile",
+  "type": "object",
+  "required": ["id", "name", "description", "memory_style"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "memory_style": { "type": "string", "enum": ["narrative", "concise"] },
+    "tool_access": { "type": "string", "const": "full" }
+  }
+}
+

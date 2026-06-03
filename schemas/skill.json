@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EidosSkill",
+  "type": "object",
+  "required": ["id", "name", "summary", "status"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "summary": { "type": "string" },
+    "examples": { "type": "array", "items": { "type": "string" } },
+    "status": { "type": "string", "enum": ["ready", "needs_test", "broken", "planned"] },
+    "last_tested_at": { "type": "string" },
+    "notes": { "type": "string" }
+  }
+}
+

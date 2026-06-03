@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Eidos Portal</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="mark">E</div>
+        <div>
+          <h1>Eidos</h1>
+          <p>personal agent</p>
+        </div>
+      </div>
+      <nav>
+        <button class="active" data-view="today">Today</button>
+        <button data-view="messages">Messages</button>
+        <button data-view="people">People</button>
+        <button data-view="history">History</button>
+        <button data-view="skills">Skills</button>
+        <button data-view="profiles">Profiles</button>
+        <button data-view="system">System</button>
+      </nav>
+    </aside>
+
+    <main>
+      <section class="toolbar">
+        <div>
+          <h2 id="view-title">Today</h2>
+          <p id="view-subtitle">Grounded check-in surface for schedule, messages, and relevant context.</p>
+        </div>
+        <select id="profile-select" aria-label="Active profile">
+          <option value="personal">personal</option>
+          <option value="creative">creative</option>
+          <option value="bioinformatics">bioinformatics</option>
+        </select>
+      </section>
+
+      <section id="content" class="content-grid"></section>
+    </main>
+
+    <script src="./main.js"></script>
+  </body>
+</html>
+
