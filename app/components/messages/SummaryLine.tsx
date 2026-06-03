@@ -19,7 +19,7 @@ export function SummaryLine({
     [formatNumber(run?.total_messages), `${windowDays}d messages`],
     [formatNumber(run?.conversation_count ?? conversationCount), `${windowDays}d active conversations`],
     [formatDate(run?.last_message_at), "latest"],
-    [formatDate(run?.exported_at), "ingested"],
+    [formatDate(run?.exported_at), "last ingested"],
   ];
 
   return (
