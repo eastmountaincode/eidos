@@ -405,17 +405,25 @@ tr:last-child td {
   border-bottom: 0;
 }
 
-.bar {
+.balance-bar {
+  display: flex;
   height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface-2);
 }
 
-.bar span {
+.balance-bar span {
   display: block;
   height: 100%;
+}
+
+.balance-bar .sent {
   background: var(--accent);
+}
+
+.balance-bar .received {
+  background: var(--accent-2);
 }
 
 @media (max-width: 940px) {

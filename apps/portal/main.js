@@ -28,7 +28,7 @@ function render(data) {
 
     <section class="panel">
       <div class="panel-head">
-        <h3>Most active people</h3>
+        <h3>People, last ${run.window_days ?? 30} days</h3>
         ${badge(data.status || "pending")}
       </div>
       ${renderConversations(conversations)}
@@ -51,20 +51,22 @@ function renderConversations(conversations) {
   if (!conversations.length) {
     return `<p class="empty">No conversations ingested yet.</p>`;
   }
-  const max = Math.max(...conversations.map((item) => Number(item.message_count || 0)), 1);
   return `<div class="conversation-list">
     ${conversations.map((item) => {
       const count = Number(item.message_count || 0);
       const sent = Number(item.sent_count || 0);
       const received = Number(item.received_count || 0);
       const sentPct = count ? Math.round((sent / count) * 100) : 0;
-      const width = Math.max(4, Math.round((count / max) * 100));
+      const receivedPct = count ? 100 - sentPct : 0;
       return `<article class="conversation-row">
         <div class="row-head">
           <span class="row-title">${escapeHtml(item.display_name || "Unknown")}</span>
           <span class="row-subtitle">${escapeHtml(String(count))} messages</span>
         </div>
-        <div class="bar"><span style="width: ${width}%"></span></div>
+        <div class="balance-bar" aria-label="${sentPct}% from Andrew, ${receivedPct}% from them">
+          <span class="sent" style="width: ${sentPct}%"></span>
+          <span class="received" style="width: ${receivedPct}%"></span>
+        </div>
         <div class="conversation-meta">
           <span>${sent} sent</span>
           <span>${received} received</span>
