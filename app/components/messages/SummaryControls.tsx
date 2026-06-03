@@ -1,8 +1,8 @@
 import type { SummaryWindow } from "@/types/messages";
 
 const summaryWindows: Array<{ label: string; value: SummaryWindow }> = [
-  { label: "Last week", value: "week" },
   { label: "Last 2 weeks", value: "two_weeks" },
+  { label: "Last week", value: "week" },
   { label: "Last month", value: "month" },
   { label: "Last 100 messages", value: "last_100" },
 ];
