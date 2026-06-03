@@ -81,11 +81,11 @@ function SummaryMetadata({ summary }: { summary: ConversationSummary }) {
   const items = summaryMetadataItems(summary);
 
   return (
-    <dl className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+    <dl className="grid gap-1 text-[11px] text-muted">
       {items.map(([label, value]) => (
-        <div className="flex gap-1" key={label}>
-          <dt className="font-bold text-soft">{label}:</dt>
-          <dd>{value}</dd>
+        <div className="grid grid-cols-[58px_1fr] gap-2" key={label}>
+          <dt className="font-bold text-soft">{label}</dt>
+          <dd className="min-w-0">{value}</dd>
         </div>
       ))}
     </dl>
