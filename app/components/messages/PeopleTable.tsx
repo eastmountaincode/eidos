@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Conversation } from "@/types/messages";
 import { formatNumber, formatShortDate } from "./format";
@@ -91,8 +92,8 @@ function HeaderButton({
       type="button"
     >
       <span>{column.label}</span>
-      <span className={`text-[9px] leading-none ${isActive ? "text-ink" : "text-transparent"}`} aria-hidden="true">
-        {sortDirection === "asc" ? "^" : "v"}
+      <span className={`grid size-3 place-items-center ${isActive ? "text-ink" : "text-transparent"}`} aria-hidden="true">
+        {sortDirection === "asc" ? <ArrowUp className="size-3" strokeWidth={2} /> : <ArrowDown className="size-3" strokeWidth={2} />}
       </span>
     </button>
   );
