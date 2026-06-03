@@ -100,6 +100,7 @@ async function getConversationDetail(env, url) {
   if (!conversationKey) {
     return json({ error: 'missing conversation_key' }, 400);
   }
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 20), 1), 200);
 
   const conversation = await env.DB.prepare(`
     SELECT
@@ -124,8 +125,8 @@ async function getConversationDetail(env, url) {
     FROM message_items
     WHERE conversation_key = ?
     ORDER BY timestamp DESC
-    LIMIT 20
-  `).bind(conversationKey).all();
+    LIMIT ?
+  `).bind(conversationKey, limit).all();
 
   const summaries = await env.DB.prepare(`
     SELECT

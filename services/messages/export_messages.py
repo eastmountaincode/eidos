@@ -39,7 +39,7 @@ def build_parser(home: Path, eidos_home: Path) -> argparse.ArgumentParser:
     parser.add_argument("--api-url", default=os.environ.get("EIDOS_WORKER_URL", ""))
     parser.add_argument("--api-token", default=os.environ.get("EIDOS_API_TOKEN", ""))
     parser.add_argument("--days", type=int, default=30)
-    parser.add_argument("--recent-limit", type=int, default=20, help="Recent message previews to keep per conversation")
+    parser.add_argument("--recent-limit", type=int, default=100, help="Recent message previews to keep per conversation")
     parser.add_argument("--preview-len", type=int, default=240)
     return parser
 

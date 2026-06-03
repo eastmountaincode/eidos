@@ -16,7 +16,7 @@ export function SummaryBlock({ summary }: { summary: ConversationSummary | null 
       <section className="grid gap-2 border-t border-border pt-3">
         <h4 className="text-xs font-bold">Summary</h4>
         <p className="text-xs text-muted">
-          {summary.status === "failed" ? summary.error || "Summary failed." : "Queued for the Mac mini."}
+          {summary.status === "failed" ? summarizeError(summary.error) : "Queued for the Mac mini."}
         </p>
       </section>
     );
@@ -60,6 +60,28 @@ function Themes({ themes }: { themes: string[] }) {
       </ul>
     </>
   );
+}
+
+function summarizeError(error?: string | null) {
+  if (!error) return "Summary failed.";
+
+  let text = error;
+  try {
+    const parsed = JSON.parse(error) as { stderr_tail?: string; error?: string };
+    text = parsed.stderr_tail || parsed.error || error;
+  } catch {
+    // Plain-text failures are already displayable.
+  }
+
+  if (text.includes("wss://chatgpt.com") && text.includes("403 Forbidden")) {
+    return "Background Codex auth was rejected by ChatGPT. The worker is installed, but automatic summaries need a background-safe model credential.";
+  }
+
+  if (text.includes("authorization denied")) {
+    return "The Mac mini background worker was denied access while preparing the summary.";
+  }
+
+  return "Summary failed. Check the Mac mini message summary logs for details.";
 }
 
 function summaryWindowLabel(value: SummaryWindow) {

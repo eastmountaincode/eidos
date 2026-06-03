@@ -32,6 +32,11 @@ from export_messages import (
     extract_attributed_text,
 )
 
+DEFAULT_CODEX_CANDIDATES = (
+    "/opt/homebrew/bin/codex",
+    "/usr/local/bin/codex",
+)
+
 
 def parse_args() -> argparse.Namespace:
     home = Path.home()
@@ -42,9 +47,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-token", default=os.environ.get("EIDOS_API_TOKEN", ""))
     parser.add_argument("--limit", type=int, default=1)
     parser.add_argument("--preview", action="store_true", help="Print queued jobs without processing.")
-    parser.add_argument("--codex-bin", default=shutil.which("codex") or "codex")
+    parser.add_argument("--codex-bin", default=default_codex_bin())
     parser.add_argument("--workdir", default=str(eidos_home))
     return parser.parse_args()
+
+
+def default_codex_bin() -> str:
+    found = shutil.which("codex")
+    if found:
+        return found
+
+    for candidate in DEFAULT_CODEX_CANDIDATES:
+        if Path(candidate).exists():
+            return candidate
+
+    return "codex"
 
 
 def request_json(api_url: str, token: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -126,6 +143,26 @@ def query_messages(chat_db: Path, job: dict[str, Any]) -> list[dict[str, Any]]:
     return list(reversed(messages))
 
 
+def query_cached_messages(args: argparse.Namespace, job: dict[str, Any]) -> list[dict[str, Any]]:
+    limit = int(job.get("message_limit") or 100)
+    query = urllib.parse.urlencode({
+        "conversation_key": job["conversation_key"],
+        "limit": min(max(limit, 1), 200),
+    })
+    data = request_json(args.api_url, args.api_token, f"/api/messages/conversation?{query}")
+    recent = data.get("recentMessages", [])
+    messages = [
+        {
+            "timestamp": item.get("timestamp"),
+            "direction": item.get("direction") or "unknown",
+            "text": clean_text(item.get("body") or "", 1200),
+        }
+        for item in recent
+        if (item.get("body") or "").strip()
+    ]
+    return list(reversed(messages))
+
+
 def run_codex(args: argparse.Namespace, job: dict[str, Any], messages: list[dict[str, Any]]) -> dict[str, Any]:
     if not shutil.which(args.codex_bin) and not Path(args.codex_bin).exists():
         raise RuntimeError("codex CLI not found")
@@ -187,16 +224,27 @@ Transcript:
             check=False,
         )
         if result.returncode != 0:
-            raise RuntimeError((result.stderr or result.stdout or "codex exec failed").strip()[-2000:])
+            details = {
+                "error": "codex exec failed",
+                "returncode": result.returncode,
+                "codex_bin": args.codex_bin,
+                "workdir": str(workdir),
+                "stdout_tail": (result.stdout or "").strip()[-1000:],
+                "stderr_tail": (result.stderr or "").strip()[-1000:],
+            }
+            raise RuntimeError(json.dumps(details, ensure_ascii=False))
         return json.loads(output_path.read_text(encoding="utf-8"))
 
 
 def process_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]:
     started_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
     try:
-        messages = query_messages(Path(args.chat_db).expanduser(), job)
+        try:
+            messages = query_messages(Path(args.chat_db).expanduser(), job)
+        except Exception:
+            messages = query_cached_messages(args, job)
         if not messages:
-            raise RuntimeError("no local messages matched this summary job")
+            raise RuntimeError("no messages matched this summary job")
         result = run_codex(args, job, messages)
         payload = {
             "status": "completed",
