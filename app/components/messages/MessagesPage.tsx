@@ -7,6 +7,14 @@ import { PeopleTable } from "./PeopleTable";
 import { shortSource } from "./format";
 import { SummaryLine } from "./SummaryLine";
 
+async function fetchConversationDetail(conversationKey: string) {
+  const response = await fetch(`/api/message-detail?conversation_key=${encodeURIComponent(conversationKey)}`, {
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<ConversationDetailType>;
+}
+
 export function MessagesPage({ initialData }: { initialData: MessagesOverview }) {
   const [data] = useState(initialData);
   const [selectedKey, setSelectedKey] = useState("");
@@ -22,11 +30,7 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
     setIsLoadingDetail(true);
     setDetailError("");
 
-    fetch(`/api/message-detail?conversation_key=${encodeURIComponent(selectedKey)}`, { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<ConversationDetailType>;
-      })
+    fetchConversationDetail(selectedKey)
       .then((nextDetail) => {
         if (!cancelled) setDetail(nextDetail);
       })
@@ -41,6 +45,28 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
       cancelled = true;
     };
   }, [selectedKey]);
+
+  useEffect(() => {
+    if (!selectedKey) return;
+    const latestSummary = detail?.summaries[0];
+    if (!latestSummary || !["queued", "running"].includes(latestSummary.status)) return;
+
+    let cancelled = false;
+    const interval = window.setInterval(() => {
+      fetchConversationDetail(selectedKey)
+        .then((nextDetail) => {
+          if (!cancelled) setDetail(nextDetail);
+        })
+        .catch((error) => {
+          if (!cancelled) setDetailError(`Could not refresh summary status: ${String(error)}`);
+        });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [selectedKey, detail?.summaries]);
 
   async function requestSummary(windowType: SummaryWindow) {
     if (!selectedKey) return;
@@ -58,11 +84,7 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      const detailResponse = await fetch(`/api/message-detail?conversation_key=${encodeURIComponent(selectedKey)}`, {
-        cache: "no-store",
-      });
-      if (!detailResponse.ok) throw new Error(`HTTP ${detailResponse.status}`);
-      setDetail((await detailResponse.json()) as ConversationDetailType);
+      setDetail(await fetchConversationDetail(selectedKey));
     } catch (error) {
       setDetailError(`Summary request failed: ${String(error)}`);
     } finally {

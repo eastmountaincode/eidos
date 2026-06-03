@@ -245,7 +245,7 @@ async function getSummaryJobs(env, url) {
 }
 
 async function completeSummaryJob(env, id, payload) {
-  const status = payload.status === 'failed' ? 'failed' : 'completed';
+  const status = normalizeSummaryStatus(payload.status);
   const themesJson = payload.themes_json
     ? JSON.stringify(payload.themes_json)
     : payload.themes
@@ -295,6 +295,12 @@ async function completeSummaryJob(env, id, payload) {
   }
 
   return json({ summary: normalizeSummary(summary) });
+}
+
+function normalizeSummaryStatus(value) {
+  if (value === 'failed') return 'failed';
+  if (value === 'running') return 'running';
+  return 'completed';
 }
 
 async function ingestMessages(env, payload) {

@@ -1,7 +1,7 @@
 import type { ConversationDetail as ConversationDetailType, SummaryWindow } from "@/types/messages";
 import { formatDate, formatNumber } from "./format";
 import { RecentMessages } from "./RecentMessages";
-import { SummaryBlock, summaryStatus } from "./SummaryBlock";
+import { SummaryBlock } from "./SummaryBlock";
 import { SummaryControls } from "./SummaryControls";
 
 type ConversationDetailProps = {
@@ -51,7 +51,6 @@ export function ConversationDetail({
       </div>
 
       <SummaryControls disabled={isRequestingSummary} onRequestSummary={onRequestSummary} />
-      <p className="text-xs text-muted">{latestSummary ? summaryStatus(latestSummary) : "No summary requested yet."}</p>
       <SummaryBlock summary={latestSummary} />
       <RecentMessages messages={detail.recentMessages} />
     </div>

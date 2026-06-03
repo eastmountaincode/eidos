@@ -242,6 +242,11 @@ Transcript:
 
 def process_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]:
     started_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
+    update_summary_job(args, job["id"], {
+        "status": "running",
+        "started_at": started_at,
+        "error": None,
+    })
     try:
         try:
             messages = query_messages(Path(args.chat_db).expanduser(), job)
@@ -270,7 +275,11 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]
             "error": str(exc),
         }
 
-    return request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs/{urllib.parse.quote(job['id'])}", payload)
+    return update_summary_job(args, job["id"], payload)
+
+
+def update_summary_job(args: argparse.Namespace, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs/{urllib.parse.quote(job_id)}", payload)
 
 
 def main() -> None:

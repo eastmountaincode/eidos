@@ -15,9 +15,11 @@ export function SummaryBlock({ summary }: { summary: ConversationSummary | null 
     return (
       <section className="grid gap-2 border-t border-border pt-3">
         <h4 className="text-xs font-bold">Summary</h4>
-        <p className="text-xs text-muted">
-          {summary.status === "failed" ? summarizeError(summary.error) : "Queued for the Mac mini."}
-        </p>
+        {summary.status === "failed" ? (
+          <p className="text-xs text-muted">{summarizeError(summary.error)}</p>
+        ) : (
+          <SummaryProgress status={summary.status} />
+        )}
       </section>
     );
   }
@@ -59,6 +61,22 @@ function Themes({ themes }: { themes: string[] }) {
         ))}
       </ul>
     </>
+  );
+}
+
+function SummaryProgress({ status }: { status: "queued" | "running" }) {
+  const message =
+    status === "running"
+      ? "Summary is running. This usually takes under a minute."
+      : "Summary requested. Waiting for the worker to pick it up.";
+
+  return (
+    <div className="grid gap-2" role="status" aria-live="polite">
+      <p className="text-xs text-muted">{message}</p>
+      <div className="h-1.5 overflow-hidden rounded-full bg-[#e6eeee]" aria-hidden="true">
+        <div className="h-full w-1/2 animate-[summary-progress_1.4s_ease-in-out_infinite] rounded-full bg-accent" />
+      </div>
+    </div>
   );
 }
 
