@@ -47,6 +47,20 @@ export default {
       return requestSummary(env, payload);
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/messages/ingest-request') {
+      return requestIngest(env);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/messages/ingest-requests') {
+      return getIngestRequests(env, url);
+    }
+
+    const ingestRequestMatch = url.pathname.match(/^\/api\/messages\/ingest-requests\/([^/]+)$/);
+    if (request.method === 'POST' && ingestRequestMatch) {
+      const payload = await request.json();
+      return updateIngestRequest(env, ingestRequestMatch[1], payload);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/messages/summary-jobs') {
       return getSummaryJobs(env, url);
     }
@@ -88,9 +102,17 @@ async function getMessagesOverview(env) {
     LIMIT 20
   `).all();
 
+  const latestIngestRequest = await env.DB.prepare(`
+    SELECT *
+    FROM message_ingest_requests
+    ORDER BY requested_at DESC
+    LIMIT 1
+  `).first();
+
   return json({
     status: latestRun ? 'active' : 'pending',
     latestRun,
+    latestIngestRequest,
     topConversations: top.results,
   });
 }
@@ -218,6 +240,99 @@ async function requestSummary(env, payload) {
   return json({ summary: normalizeSummary(summary), reused: false }, 202);
 }
 
+async function requestIngest(env) {
+  const existing = await env.DB.prepare(`
+    SELECT *
+    FROM message_ingest_requests
+    WHERE status IN ('queued', 'running')
+    ORDER BY requested_at DESC
+    LIMIT 1
+  `).first();
+
+  if (existing) {
+    return json({ request: existing, reused: true }, 202);
+  }
+
+  const id = crypto.randomUUID();
+  await env.DB.prepare(`
+    INSERT INTO message_ingest_requests (
+      id, status, requested_at, updated_at
+    ) VALUES (?, 'queued', datetime('now'), datetime('now'))
+  `).bind(id).run();
+
+  const request = await env.DB.prepare(`
+    SELECT *
+    FROM message_ingest_requests
+    WHERE id = ?
+  `).bind(id).first();
+
+  return json({ request, reused: false }, 202);
+}
+
+async function getIngestRequests(env, url) {
+  const status = url.searchParams.get('status') || '';
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 5), 1), 20);
+  const allowed = new Set(['queued', 'running', 'completed', 'failed']);
+
+  if (allowed.has(status)) {
+    const requests = await env.DB.prepare(`
+      SELECT *
+      FROM message_ingest_requests
+      WHERE status = ?
+      ORDER BY requested_at ASC
+      LIMIT ?
+    `).bind(status, limit).all();
+    return json({ requests: requests.results });
+  }
+
+  const requests = await env.DB.prepare(`
+    SELECT *
+    FROM message_ingest_requests
+    ORDER BY requested_at DESC
+    LIMIT ?
+  `).bind(limit).all();
+  return json({ requests: requests.results });
+}
+
+async function updateIngestRequest(env, id, payload) {
+  const status = normalizeIngestRequestStatus(payload.status);
+  await env.DB.prepare(`
+    UPDATE message_ingest_requests
+    SET
+      status = ?,
+      started_at = CASE
+        WHEN ? = 'running' THEN COALESCE(started_at, datetime('now'))
+        ELSE started_at
+      END,
+      completed_at = CASE
+        WHEN ? IN ('completed', 'failed') THEN COALESCE(?, datetime('now'))
+        ELSE completed_at
+      END,
+      error = ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    status,
+    status,
+    status,
+    payload.completed_at || null,
+    payload.error || null,
+    id,
+  ).run();
+
+  const request = await env.DB.prepare(`
+    SELECT *
+    FROM message_ingest_requests
+    WHERE id = ?
+  `).bind(id).first();
+
+  if (!request) {
+    return json({ error: 'ingest request not found' }, 404);
+  }
+
+  return json({ request });
+}
+
 async function getSummaryJobs(env, url) {
   const status = url.searchParams.get('status') || 'queued';
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 5), 1), 20);
@@ -300,6 +415,13 @@ async function completeSummaryJob(env, id, payload) {
 function normalizeSummaryStatus(value) {
   if (value === 'failed') return 'failed';
   if (value === 'running') return 'running';
+  return 'completed';
+}
+
+function normalizeIngestRequestStatus(value) {
+  if (value === 'failed') return 'failed';
+  if (value === 'running') return 'running';
+  if (value === 'queued') return 'queued';
   return 'completed';
 }
 

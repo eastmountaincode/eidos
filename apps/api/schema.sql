@@ -38,6 +38,18 @@ CREATE INDEX IF NOT EXISTS idx_message_items_conversation_time ON message_items(
 CREATE INDEX IF NOT EXISTS idx_message_items_timestamp ON message_items(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_message_conversations_count ON message_conversations(message_count DESC);
 
+CREATE TABLE IF NOT EXISTS message_ingest_requests (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'queued',
+  requested_at TEXT DEFAULT (datetime('now')),
+  started_at TEXT,
+  completed_at TEXT,
+  error TEXT,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_ingest_requests_status ON message_ingest_requests(status, requested_at);
+
 CREATE TABLE IF NOT EXISTS conversation_summaries (
   id TEXT PRIMARY KEY,
   conversation_key TEXT NOT NULL,

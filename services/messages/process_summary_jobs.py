@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Process queued message summary jobs for Eidos.
+"""Process queued message jobs for Eidos.
 
 Runs on the Mac mini because that is where the full Messages database lives.
-The portal queues jobs in D1; this script reads the relevant local messages,
-invokes Codex on demand, and writes the summary back to D1.
+The portal queues jobs in D1; this script handles explicit ingest requests and
+on-demand summaries from the local Messages database.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from export_messages import (
     APPLE_EPOCH_OFFSET,
     apple_cutoff_ns,
     apple_ns_to_iso,
+    export_messages,
     clean_text,
     connect_readonly,
     extract_attributed_text,
@@ -282,19 +283,69 @@ def update_summary_job(args: argparse.Namespace, job_id: str, payload: dict[str,
     return request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs/{urllib.parse.quote(job_id)}", payload)
 
 
+def process_ingest_request(args: argparse.Namespace, request: dict[str, Any]) -> dict[str, Any]:
+    request_id = request["id"]
+    update_ingest_request(args, request_id, {
+        "status": "running",
+        "error": None,
+    })
+
+    try:
+        ingest_args = argparse.Namespace(
+            chat_db=args.chat_db,
+            out="",
+            summary_out="",
+            overrides=str(Path.home() / ".eidos/data/messages/contact-overrides.txt"),
+            api_url=args.api_url,
+            api_token=args.api_token,
+            days=30,
+            recent_limit=100,
+            preview_len=240,
+        )
+        export_messages(ingest_args)
+        payload = {
+            "status": "completed",
+            "completed_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+            "error": None,
+        }
+    except Exception as exc:
+        payload = {
+            "status": "failed",
+            "completed_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+            "error": str(exc),
+        }
+
+    return update_ingest_request(args, request_id, payload)
+
+
+def update_ingest_request(args: argparse.Namespace, request_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return request_json(args.api_url, args.api_token, f"/api/messages/ingest-requests/{urllib.parse.quote(request_id)}", payload)
+
+
 def main() -> None:
     args = parse_args()
     if not args.api_url or not args.api_token:
         raise SystemExit("EIDOS_WORKER_URL and EIDOS_API_TOKEN are required")
 
-    data = request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs?status=queued&limit={args.limit}")
-    jobs = data.get("jobs", [])
+    ingest_data = request_json(args.api_url, args.api_token, "/api/messages/ingest-requests?status=queued&limit=1")
+    ingest_requests = ingest_data.get("requests", [])
+    summary_data = request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs?status=queued&limit={args.limit}")
+    summary_jobs = summary_data.get("jobs", [])
     if args.preview:
-        print(json.dumps({"jobs": jobs}, indent=2))
+        print(json.dumps({
+            "ingest_requests": ingest_requests,
+            "summary_jobs": summary_jobs,
+        }, indent=2))
         return
 
-    results = [process_job(args, job) for job in jobs]
-    print(json.dumps({"processed": len(results), "results": results}, indent=2))
+    ingest_results = [process_ingest_request(args, request) for request in ingest_requests]
+    summary_results = [process_job(args, job) for job in summary_jobs]
+    print(json.dumps({
+        "ingests_processed": len(ingest_results),
+        "summaries_processed": len(summary_results),
+        "ingest_results": ingest_results,
+        "summary_results": summary_results,
+    }, indent=2))
 
 
 if __name__ == "__main__":

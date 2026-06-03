@@ -10,6 +10,16 @@ export type MessageRun = {
   last_message_at?: string | null;
 };
 
+export type MessageIngestRequest = {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed";
+  requested_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  error?: string | null;
+  updated_at?: string | null;
+};
+
 export type Conversation = {
   conversation_key: string;
   display_name: string;
@@ -53,6 +63,7 @@ export type ConversationSummary = {
 export type MessagesOverview = {
   status: "active" | "pending" | string;
   latestRun?: MessageRun | null;
+  latestIngestRequest?: MessageIngestRequest | null;
   topConversations: Conversation[];
 };
 

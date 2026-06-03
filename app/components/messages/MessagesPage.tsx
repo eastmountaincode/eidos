@@ -15,13 +15,27 @@ async function fetchConversationDetail(conversationKey: string) {
   return response.json() as Promise<ConversationDetailType>;
 }
 
+async function fetchMessagesOverview() {
+  const response = await fetch("/api/messages", { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<MessagesOverview>;
+}
+
+function remoteTime(value?: string | null) {
+  if (!value) return 0;
+  const normalized = /^\d{4}-\d{2}-\d{2} /.test(value) ? `${value.replace(" ", "T")}Z` : value;
+  const time = new Date(normalized).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
 export function MessagesPage({ initialData }: { initialData: MessagesOverview }) {
-  const [data] = useState(initialData);
+  const [data, setData] = useState(initialData);
   const [selectedKey, setSelectedKey] = useState("");
   const [detail, setDetail] = useState<ConversationDetailType | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [isRequestingSummary, setIsRequestingSummary] = useState(false);
+  const [isRequestingIngest, setIsRequestingIngest] = useState(false);
 
   useEffect(() => {
     if (!selectedKey) return;
@@ -68,6 +82,41 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
     };
   }, [selectedKey, detail?.summaries]);
 
+  useEffect(() => {
+    const status = data.latestIngestRequest?.status;
+    if (!isRequestingIngest && !["queued", "running"].includes(status || "")) return;
+
+    let cancelled = false;
+    const interval = window.setInterval(() => {
+      fetchMessagesOverview()
+        .then((nextData) => {
+          if (cancelled) return;
+          setData(nextData);
+          const nextStatus = nextData.latestIngestRequest?.status;
+          if (!["queued", "running"].includes(nextStatus || "")) {
+            setIsRequestingIngest(false);
+            if (selectedKey) {
+              fetchConversationDetail(selectedKey)
+                .then((nextDetail) => {
+                  if (!cancelled) setDetail(nextDetail);
+                })
+                .catch((error) => {
+                  if (!cancelled) setDetailError(`Could not refresh conversation detail: ${String(error)}`);
+                });
+            }
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) setDetailError(`Could not refresh ingest status: ${String(error)}`);
+        });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [data.latestIngestRequest?.status, isRequestingIngest, selectedKey]);
+
   async function requestSummary(windowType: SummaryWindow) {
     if (!selectedKey) return;
 
@@ -92,8 +141,27 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
     }
   }
 
+  async function requestIngest() {
+    setIsRequestingIngest(true);
+    setDetailError("");
+    try {
+      const response = await fetch("/api/message-ingest", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setData(await fetchMessagesOverview());
+    } catch (error) {
+      setIsRequestingIngest(false);
+      setDetailError(`Ingest request failed: ${String(error)}`);
+    }
+  }
+
   const run = data.latestRun;
   const windowDays = run?.window_days ?? 30;
+  const ingestStatus = data.latestIngestRequest?.status;
+  const isIngesting = isRequestingIngest || ["queued", "running"].includes(ingestStatus || "");
+  const ingestFailed = ingestStatus === "failed"
+    && remoteTime(data.latestIngestRequest?.requested_at) > remoteTime(run?.exported_at);
 
   return (
     <div className="grid gap-3">
@@ -104,7 +172,13 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
         </span>
       </header>
 
-      <SummaryLine conversationCount={data.topConversations.length} run={run} />
+      <SummaryLine
+        conversationCount={data.topConversations.length}
+        ingestFailed={ingestFailed}
+        isIngesting={isIngesting}
+        onIngest={requestIngest}
+        run={run}
+      />
 
       <section className="grid items-start gap-3 xl:grid-cols-[minmax(620px,1fr)_minmax(320px,380px)]">
         <section className="rounded-lg border border-border bg-white p-3">

@@ -1,4 +1,4 @@
-import type { ConversationDetail, MessagesOverview, SummaryWindow } from "@/types/messages";
+import type { ConversationDetail, MessageIngestRequest, MessagesOverview, SummaryWindow } from "@/types/messages";
 
 function workerBaseUrl() {
   const workerUrl = process.env.EIDOS_WORKER_URL;
@@ -32,6 +32,12 @@ async function workerFetch<T>(path: string, init: RequestInit = {}): Promise<T> 
 
 export function getMessagesOverview() {
   return workerFetch<MessagesOverview>("/api/messages/overview");
+}
+
+export function requestMessagesIngest() {
+  return workerFetch<{ request: MessageIngestRequest; reused: boolean }>("/api/messages/ingest-request", {
+    method: "POST",
+  });
 }
 
 export function getConversationDetail(conversationKey: string) {
