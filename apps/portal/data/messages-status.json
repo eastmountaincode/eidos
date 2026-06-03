@@ -1,0 +1,20 @@
+{
+  "exported_at": "2026-06-02T22:05:36-04:00",
+  "status": "active",
+  "source": "~/Library/Messages/chat.db",
+  "private_data_path": "/Users/oasis/.eidos/data/messages/messages.json",
+  "window_days": 30,
+  "stats": {
+    "total_messages": 1947,
+    "sent_messages": 881,
+    "received_messages": 1066,
+    "last_message_at": "2026-06-02T22:04:16-04:00",
+    "conversation_count": 50,
+    "services_in_recent_export": {
+      "iMessage": 119,
+      "SMS": 79,
+      "RCS": 2
+    }
+  },
+  "note": "Sanitized status only. Message text and handles stay on the Mac mini."
+}

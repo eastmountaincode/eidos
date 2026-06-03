@@ -1,0 +1,7 @@
+# Private contact name overrides. Do not commit the real file.
+# Format:
+# normalized_handle_or_phone|Display Name
+#
+# Example:
+# 15551234567|Example Person
+# person@example.com|Example Person
