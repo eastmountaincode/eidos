@@ -83,6 +83,7 @@ async function getMessagesOverview(env) {
       received_count,
       last_active
     FROM message_conversations
+    WHERE message_count > 0
     ORDER BY message_count DESC, last_active DESC
     LIMIT 20
   `).all();
@@ -320,11 +321,20 @@ async function ingestMessages(env, payload) {
   ).run();
 
   await env.DB.prepare('DELETE FROM message_items').run();
-  await env.DB.prepare('DELETE FROM message_conversations').run();
+  await env.DB.prepare(`
+    UPDATE message_conversations
+    SET message_count = 0,
+        sent_count = 0,
+        received_count = 0,
+        updated_at = datetime('now')
+  `).run();
 
+  const conversationKeys = new Set();
+  const conversationStatements = [];
   for (const conversation of conversations) {
     const conversationKey = keyForConversation(conversation);
-    await env.DB.prepare(`
+    conversationKeys.add(conversationKey);
+    conversationStatements.push(env.DB.prepare(`
       INSERT INTO message_conversations (
         conversation_key, display_name, handle, chat_type, message_count,
         sent_count, received_count, last_active, updated_at
@@ -347,30 +357,22 @@ async function ingestMessages(env, payload) {
       conversation.sent_count || 0,
       conversation.received_count || 0,
       conversation.last_active || null,
-    ).run();
+    ));
   }
+  await runBatches(env, conversationStatements);
 
+  const storedRows = await env.DB.prepare(`
+    SELECT conversation_key
+    FROM message_conversations
+  `).all();
+  const storedConversationKeys = new Set(storedRows.results.map((row) => row.conversation_key));
+
+  const messageStatements = [];
   for (const item of recentMessages) {
     const conversationKey = keyForConversation(item);
-    await env.DB.prepare(`
-      INSERT INTO message_conversations (
-        conversation_key, display_name, handle, chat_type, last_active, updated_at
-      ) VALUES (?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(conversation_key) DO UPDATE SET
-        display_name = COALESCE(message_conversations.display_name, excluded.display_name),
-        handle = COALESCE(message_conversations.handle, excluded.handle),
-        chat_type = COALESCE(message_conversations.chat_type, excluded.chat_type),
-        last_active = COALESCE(message_conversations.last_active, excluded.last_active),
-        updated_at = datetime('now')
-    `).bind(
-      conversationKey,
-      item.contact || item.handle || 'Unknown',
-      item.handle || null,
-      item.chat_type || null,
-      item.timestamp || null,
-    ).run();
+    if (!conversationKeys.has(conversationKey) || !storedConversationKeys.has(conversationKey)) continue;
 
-    await env.DB.prepare(`
+    messageStatements.push(env.DB.prepare(`
       INSERT INTO message_items (
         source_id, conversation_key, timestamp, direction, chat_type, body, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
@@ -388,15 +390,22 @@ async function ingestMessages(env, payload) {
       item.direction || null,
       item.chat_type || null,
       item.preview || '',
-    ).run();
+    ));
   }
+  await runBatches(env, messageStatements);
 
   return json({
     ok: true,
     runId,
     conversations: conversations.length,
-    recentMessages: recentMessages.length,
+    recentMessages: messageStatements.length,
   }, 201);
+}
+
+async function runBatches(env, statements, size = 100) {
+  for (let index = 0; index < statements.length; index += size) {
+    await env.DB.batch(statements.slice(index, index + size));
+  }
 }
 
 function normalizeWindowType(value) {

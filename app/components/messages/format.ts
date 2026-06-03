@@ -18,7 +18,7 @@ export function formatShortDate(value?: string | null) {
     month: "short",
     day: "numeric",
     hour: "numeric",
-  }).replace(",", "");
+  });
 }
 
 export function formatNumber(value?: number | null) {

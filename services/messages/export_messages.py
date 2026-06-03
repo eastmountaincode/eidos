@@ -39,7 +39,7 @@ def build_parser(home: Path, eidos_home: Path) -> argparse.ArgumentParser:
     parser.add_argument("--api-url", default=os.environ.get("EIDOS_WORKER_URL", ""))
     parser.add_argument("--api-token", default=os.environ.get("EIDOS_API_TOKEN", ""))
     parser.add_argument("--days", type=int, default=30)
-    parser.add_argument("--recent-limit", type=int, default=200)
+    parser.add_argument("--recent-limit", type=int, default=20, help="Recent message previews to keep per conversation")
     parser.add_argument("--preview-len", type=int, default=240)
     return parser
 
@@ -169,25 +169,32 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
     conn.row_factory = sqlite3.Row
 
     recent_rows = conn.execute("""
-        SELECT
-            m.ROWID AS id,
-            m.date,
-            COALESCE(h.id, CASE WHEN c.style = 43 THEN '' ELSE c.chat_identifier END, '') AS handle,
-            COALESCE(m.service, h.service, '') AS service,
-            m.is_from_me,
-            m.text,
-            m.attributedBody,
-            COALESCE(c.display_name, '') AS group_name,
-            COALESCE(c.chat_identifier, '') AS chat_identifier,
-            CASE WHEN c.style = 43 THEN 'group' ELSE 'direct' END AS chat_type
-        FROM message m
-        LEFT JOIN handle h ON m.handle_id = h.ROWID
-        LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
-        LEFT JOIN chat c ON cmj.chat_id = c.ROWID
-        WHERE (m.text IS NOT NULL AND m.text != '' OR m.attributedBody IS NOT NULL)
-          AND m.date > ?
-        ORDER BY m.date DESC
-        LIMIT ?
+        SELECT *
+        FROM (
+            SELECT
+                m.ROWID AS id,
+                m.date,
+                COALESCE(h.id, CASE WHEN c.style = 43 THEN '' ELSE c.chat_identifier END, '') AS handle,
+                COALESCE(m.service, h.service, '') AS service,
+                m.is_from_me,
+                m.text,
+                m.attributedBody,
+                COALESCE(c.display_name, '') AS group_name,
+                COALESCE(c.chat_identifier, '') AS chat_identifier,
+                CASE WHEN c.style = 43 THEN 'group' ELSE 'direct' END AS chat_type,
+                ROW_NUMBER() OVER (
+                    PARTITION BY CASE WHEN c.style = 43 THEN COALESCE(c.chat_identifier, c.display_name, 'Unknown') ELSE COALESCE(h.id, c.chat_identifier, 'Unknown') END
+                    ORDER BY m.date DESC
+                ) AS conversation_rank
+            FROM message m
+            LEFT JOIN handle h ON m.handle_id = h.ROWID
+            LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
+            LEFT JOIN chat c ON cmj.chat_id = c.ROWID
+            WHERE (m.text IS NOT NULL AND m.text != '' OR m.attributedBody IS NOT NULL)
+              AND m.date > ?
+        )
+        WHERE conversation_rank <= ?
+        ORDER BY date DESC
     """, (cutoff, args.recent_limit)).fetchall()
 
     stat_rows = conn.execute("""

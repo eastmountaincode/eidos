@@ -14,7 +14,7 @@ export function PeopleTable({ conversations, selectedKey, onSelect }: PeopleTabl
 
   return (
     <div className="border-t border-border">
-      <div className="grid min-h-8 grid-cols-[28px_minmax(104px,1fr)_58px_96px_96px_82px] items-center gap-2 border-b border-border py-1.5 text-[11px] font-bold text-soft">
+      <div className="grid h-8 grid-cols-[28px_minmax(104px,1fr)_58px_96px_112px_92px] items-center gap-2 border-b border-border text-[11px] font-bold text-soft">
         <span>#</span>
         <span>Person</span>
         <span>Messages</span>
@@ -54,7 +54,7 @@ function PersonRow({
 
   return (
     <button
-      className={`grid min-h-9 w-full grid-cols-[28px_minmax(104px,1fr)_58px_96px_96px_82px] items-center gap-2 border-b border-border py-1.5 text-left text-xs text-muted outline-none hover:bg-[#f4f8f7] focus-visible:shadow-[inset_3px_0_0_#0f766e] ${
+      className={`grid h-9 w-full cursor-pointer grid-cols-[28px_minmax(104px,1fr)_58px_96px_112px_92px] items-center gap-2 border-b border-border text-left text-xs text-muted outline-none hover:bg-[#f4f8f7] focus-visible:shadow-[inset_3px_0_0_#0f766e] ${
         isSelected ? "bg-[#f4f8f7]" : ""
       }`}
       onClick={() => onSelect(conversation.conversation_key)}
@@ -69,7 +69,7 @@ function PersonRow({
           <span className="bg-accent-2" style={{ width: `${receivedPct}%` }} />
         </span>
       </span>
-      <span className="flex flex-wrap gap-x-2 gap-y-1">
+      <span className="flex gap-x-2 overflow-hidden whitespace-nowrap">
         <span>{sent} you</span>
         <span>{received} them</span>
       </span>
