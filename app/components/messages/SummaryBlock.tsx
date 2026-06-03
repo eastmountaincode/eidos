@@ -28,7 +28,7 @@ export function SummaryBlock({ summary }: { summary: ConversationSummary | null 
     <section className="grid gap-2 border-t border-border pt-3">
       <div className="grid gap-0.5">
         <h4 className="text-xs font-bold">Summary</h4>
-        <p className="text-[11px] text-muted">{summaryMetadata(summary)}</p>
+        <SummaryMetadata summary={summary} />
       </div>
       <p className="text-xs text-muted">{summary.summary || "No summary text."}</p>
       <Themes themes={summary.themes || []} />
@@ -77,22 +77,42 @@ function SummaryProgress({ status }: { status: "queued" | "running" }) {
   );
 }
 
-function summaryMetadata(summary: ConversationSummary) {
-  const parts = [
-    summary.generated_at ? `Generated ${formatDate(summary.generated_at)}` : "Generated time unavailable",
-    summaryCorpusLabel(summary),
-  ];
-  return parts.filter(Boolean).join(" | ");
+function SummaryMetadata({ summary }: { summary: ConversationSummary }) {
+  const items = summaryMetadataItems(summary);
+
+  return (
+    <dl className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+      {items.map(([label, value]) => (
+        <div className="flex gap-1" key={label}>
+          <dt className="font-bold text-soft">{label}:</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
-function summaryCorpusLabel(summary: ConversationSummary) {
-  const corpus = summaryWindowLabel(summary.window_type);
-  const count = summary.message_count ? `${summary.message_count.toLocaleString()} messages` : "";
-  const range = summary.source_start_at && summary.source_end_at
-    ? `${formatDate(summary.source_start_at)} to ${formatDate(summary.source_end_at)}`
-    : "";
+function summaryMetadata(summary: ConversationSummary) {
+  return summaryMetadataItems(summary)
+    .map(([label, value]) => `${label}: ${value}`)
+    .join("; ");
+}
 
-  return [corpus, count, range].filter(Boolean).join(" | ");
+function summaryMetadataItems(summary: ConversationSummary): Array<[string, string]> {
+  const items: Array<[string, string]> = [
+    ["Generated", summary.generated_at ? formatDate(summary.generated_at) : "unavailable"],
+    ["Corpus", summaryWindowLabel(summary.window_type)],
+  ];
+
+  if (summary.message_count) {
+    items.push(["Messages", summary.message_count.toLocaleString()]);
+  }
+
+  if (summary.source_start_at && summary.source_end_at) {
+    items.push(["Range", `${formatDate(summary.source_start_at)} to ${formatDate(summary.source_end_at)}`]);
+  }
+
+  return items;
 }
 
 function summarizeError(error?: string | null) {

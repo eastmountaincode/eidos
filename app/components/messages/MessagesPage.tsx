@@ -185,12 +185,12 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold">People</h3>
-              <p className="text-sm text-muted">Last {windowDays} days, sorted by message count.</p>
+              <p className="text-sm text-muted">Last {windowDays} days.</p>
             </div>
             <span className="rounded-full bg-[#dff3e8] px-2 py-1 text-[11px] font-bold text-[#166534]">{data.status}</span>
           </div>
           <div className="overflow-x-auto">
-            <div className="min-w-[520px]">
+            <div className="min-w-[560px]">
               <PeopleTable conversations={data.topConversations} onSelect={setSelectedKey} selectedKey={selectedKey} />
             </div>
           </div>

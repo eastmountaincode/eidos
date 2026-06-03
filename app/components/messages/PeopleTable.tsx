@@ -10,23 +10,22 @@ type PeopleTableProps = {
   onSelect: (conversationKey: string) => void;
 };
 
-type SortKey = "rank" | "person" | "messages" | "out" | "in" | "balance" | "last_active";
+type SortKey = "person" | "messages" | "me" | "them" | "balance" | "last_active";
 type SortDirection = "asc" | "desc";
 
 const columns: Array<{ key: SortKey; label: string; title: string }> = [
-  { key: "rank", label: "#", title: "Sort by rank" },
   { key: "person", label: "Person", title: "Sort by person" },
   { key: "messages", label: "Messages", title: "Sort by message count" },
-  { key: "out", label: "Out", title: "Sort by sent messages" },
-  { key: "in", label: "In", title: "Sort by received messages" },
-  { key: "balance", label: "Balance", title: "Sort by outgoing share" },
+  { key: "me", label: "Me", title: "Sort by messages from me" },
+  { key: "them", label: "Them", title: "Sort by messages from them" },
+  { key: "balance", label: "Balance", title: "Sort by percent from me" },
   { key: "last_active", label: "Last active", title: "Sort by last active time" },
 ];
 
 export function PeopleTable({ conversations, selectedKey, onSelect }: PeopleTableProps) {
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
-    key: "rank",
-    direction: "asc",
+    key: "messages",
+    direction: "desc",
   });
 
   const sortedConversations = useMemo(
@@ -41,13 +40,14 @@ export function PeopleTable({ conversations, selectedKey, onSelect }: PeopleTabl
   function changeSort(key: SortKey) {
     setSort((current) => ({
       key,
-      direction: current.key === key && current.direction === "asc" ? "desc" : defaultDirection(key),
+      direction: current.key === key ? oppositeDirection(current.direction) : defaultDirection(key),
     }));
   }
 
   return (
     <div className="border-t border-border">
-      <div className="grid h-8 grid-cols-[28px_minmax(112px,1fr)_66px_44px_44px_86px_92px] items-center gap-2 border-b border-border text-[11px] font-bold text-soft">
+      <div className="grid h-8 grid-cols-[28px_minmax(112px,1fr)_76px_52px_52px_64px_96px] items-center gap-2 border-b border-border text-[11px] font-bold text-soft">
+        <span>#</span>
         {columns.map((column) => (
           <HeaderButton
             column={column}
@@ -85,12 +85,12 @@ function HeaderButton({
   return (
     <button
       aria-label={`${column.title}${isActive ? `, ${sortDirection === "asc" ? "ascending" : "descending"}` : ""}`}
-      className="flex min-w-0 cursor-pointer items-center gap-1 text-left font-bold text-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+      className="flex min-w-0 cursor-pointer items-center gap-1 whitespace-nowrap text-left font-bold text-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
       onClick={onClick}
       title={column.title}
       type="button"
     >
-      <span className="truncate">{column.label}</span>
+      <span>{column.label}</span>
       <span className={`text-[9px] leading-none ${isActive ? "text-ink" : "text-transparent"}`} aria-hidden="true">
         {sortDirection === "asc" ? "^" : "v"}
       </span>
@@ -116,7 +116,7 @@ function PersonRow({
 
   return (
     <button
-      className={`grid h-9 w-full cursor-pointer grid-cols-[28px_minmax(112px,1fr)_66px_44px_44px_86px_92px] items-center gap-2 border-b border-border text-left text-xs text-muted outline-none hover:bg-[#f4f8f7] focus-visible:shadow-[inset_3px_0_0_#0f766e] ${
+      className={`grid h-9 w-full cursor-pointer grid-cols-[28px_minmax(112px,1fr)_76px_52px_52px_64px_96px] items-center gap-2 border-b border-border text-left text-xs text-muted outline-none hover:bg-[#f4f8f7] focus-visible:shadow-[inset_3px_0_0_#0f766e] ${
         isSelected ? "bg-[#f4f8f7]" : ""
       }`}
       onClick={() => onSelect(conversation.conversation_key)}
@@ -127,16 +127,7 @@ function PersonRow({
       <span>{formatNumber(count)}</span>
       <span>{formatNumber(sent)}</span>
       <span>{formatNumber(received)}</span>
-      <span className="grid gap-1">
-        <span className="tabular-nums">{sentPct}% out</span>
-        <span className="relative h-[5px] rounded-full bg-[#edf2f2]" aria-hidden="true">
-          <span className="absolute left-1/2 top-[-2px] h-[9px] w-px bg-border" />
-          <span
-            className="absolute top-[-2px] h-[9px] w-[3px] rounded-full bg-ink"
-            style={{ left: `calc(${sentPct}% - 1px)` }}
-          />
-        </span>
-      </span>
+      <span className="tabular-nums">{sentPct}%</span>
       <span className="truncate">{formatShortDate(conversation.last_active)}</span>
     </button>
   );
@@ -162,11 +153,10 @@ function compareConversations(
   const leftConversation = left.conversation;
   const rightConversation = right.conversation;
 
-  if (key === "rank") return left.rank - right.rank;
   if (key === "person") return compareStrings(leftConversation.display_name, rightConversation.display_name);
   if (key === "messages") return compareNumbers(leftConversation.message_count, rightConversation.message_count);
-  if (key === "out") return compareNumbers(leftConversation.sent_count, rightConversation.sent_count);
-  if (key === "in") return compareNumbers(leftConversation.received_count, rightConversation.received_count);
+  if (key === "me") return compareNumbers(leftConversation.sent_count, rightConversation.sent_count);
+  if (key === "them") return compareNumbers(leftConversation.received_count, rightConversation.received_count);
   if (key === "balance") return compareNumbers(outgoingShare(leftConversation), outgoingShare(rightConversation));
   if (key === "last_active") return compareNumbers(timestamp(leftConversation.last_active), timestamp(rightConversation.last_active));
 
@@ -180,7 +170,11 @@ function outgoingShare(conversation: Conversation) {
 }
 
 function defaultDirection(key: SortKey): SortDirection {
-  return key === "person" || key === "rank" ? "asc" : "desc";
+  return key === "person" ? "asc" : "desc";
+}
+
+function oppositeDirection(direction: SortDirection): SortDirection {
+  return direction === "asc" ? "desc" : "asc";
 }
 
 function timestamp(value?: string | null) {
