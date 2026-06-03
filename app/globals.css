@@ -27,13 +27,3 @@ button:disabled,
 select:disabled {
   cursor: not-allowed;
 }
-
-@keyframes summary-progress {
-  0% {
-    transform: translateX(-105%);
-  }
-
-  100% {
-    transform: translateX(205%);
-  }
-}

@@ -65,17 +65,12 @@ function Themes({ themes }: { themes: string[] }) {
 }
 
 function SummaryProgress({ status }: { status: "queued" | "running" }) {
-  const message =
-    status === "running"
-      ? "Summary is running. This usually takes under a minute."
-      : "Summary requested. Waiting for the worker to pick it up.";
+  const message = status === "running" ? "Running" : "Queued";
 
   return (
-    <div className="grid gap-2" role="status" aria-live="polite">
-      <p className="text-xs text-muted">{message}</p>
-      <div className="h-1.5 overflow-hidden rounded-full bg-[#e6eeee]" aria-hidden="true">
-        <div className="h-full w-1/2 animate-[summary-progress_1.4s_ease-in-out_infinite] rounded-full bg-accent" />
-      </div>
+    <div className="flex items-center gap-2 text-xs text-muted" role="status" aria-live="polite">
+      <span className="size-3 rounded-full border-2 border-border border-t-accent animate-spin" aria-hidden="true" />
+      <span>{message}</span>
     </div>
   );
 }
