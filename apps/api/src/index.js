@@ -38,6 +38,10 @@ export default {
       return getMessagesOverview(env);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/messages/conversations') {
+      return getMessageConversations(env, url);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/messages/conversation') {
       return getConversationDetail(env, url);
     }
@@ -115,6 +119,27 @@ async function getMessagesOverview(env) {
     latestIngestRequest,
     topConversations: top.results,
   });
+}
+
+async function getMessageConversations(env, url) {
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 100);
+  const conversations = await env.DB.prepare(`
+    SELECT
+      conversation_key,
+      display_name,
+      handle,
+      chat_type,
+      message_count,
+      sent_count,
+      received_count,
+      last_active
+    FROM message_conversations
+    WHERE message_count > 0
+    ORDER BY message_count DESC, last_active DESC
+    LIMIT ?
+  `).bind(limit).all();
+
+  return json({ conversations: conversations.results });
 }
 
 async function getConversationDetail(env, url) {

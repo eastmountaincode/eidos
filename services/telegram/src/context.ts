@@ -35,6 +35,12 @@ export function buildPrompt(userText: string, profile: ProfileName): string {
     '- Do not infer stale projects, obligations, or priorities from old agent notes.',
     '- If a memory update seems warranted, say what you would update briefly; persistent memory writing will be implemented as a separate service.',
     '',
+    '## Available Local Tools',
+    '- Message context: use `python3 ~/.eidos/services/messages/message_context.py --person "NAME" --limit 25` when message history, relationship context, recent texts, or an existing D1 summary would materially help the response.',
+    '- To see resolvable message conversations, use `python3 ~/.eidos/services/messages/message_context.py --list`.',
+    '- Use the message context tool intentionally, not for every name mention. It is appropriate when Andrew asks you to pull texts/messages, asks about a specific person, appears conflicted about an interaction, or when recent message evidence would prevent guessing.',
+    '- The tool reads from Eidos D1, including message analytics, recent cached messages, and completed conversation summaries. It does not mutate Messages.',
+    '',
     '## User Message',
     userText,
   ].join('\n');

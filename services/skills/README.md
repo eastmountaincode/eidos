@@ -23,7 +23,7 @@ Initial Telegram inventory:
 
 - `telegram-chat`: active
 - `file-intake`: active
-- `messages-ingest`: planned
+- `messages-ingest`: active
 - `calendar-checkins`: planned
 - `meeting-transcription`: planned
 - `playlist-from-image`: planned

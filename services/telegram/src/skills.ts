@@ -17,8 +17,8 @@ const skills: Skill[] = [
   },
   {
     name: 'messages-ingest',
-    status: 'planned',
-    summary: 'Read local iMessage/SMS data for recall, contact modeling, and analytics.',
+    status: 'active',
+    summary: 'Read D1-backed iMessage/SMS context, summaries, and analytics when useful.',
   },
   {
     name: 'calendar-checkins',

@@ -39,6 +39,15 @@ python3 ~/.eidos/services/messages/process_summary_jobs.py
 
 The portal queues a summary request in D1. The Mac mini processor reads queued jobs, extracts the requested conversation window from local `chat.db`, runs `codex exec`, and writes the completed summary back to D1. This is intentionally separate from ingest so summaries are generated only when requested.
 
+Agent retrieval:
+
+```sh
+python3 ~/.eidos/services/messages/message_context.py --person "Lylia" --limit 25
+python3 ~/.eidos/services/messages/message_context.py --list
+```
+
+This reads from D1 and returns compact conversation analytics, the latest completed summary, and recent cached messages. Use higher limits intentionally when Andrew explicitly asks to pull more of a conversation into context.
+
 Known hard parts:
 
 - phone/email/handle/group-chat identity resolution

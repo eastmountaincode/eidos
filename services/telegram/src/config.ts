@@ -29,6 +29,12 @@ export const config = {
     model: optionalEnv('CODEX_MODEL'),
     path: process.env.PATH || '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
   },
+  messages: {
+    workerUrl: optionalEnv('EIDOS_WORKER_URL'),
+    apiToken: optionalEnv('EIDOS_API_TOKEN'),
+    automaticRecentLimit: Number(process.env.EIDOS_MESSAGE_CONTEXT_RECENT_LIMIT || 8),
+    explicitRecentLimit: Number(process.env.EIDOS_MESSAGE_CONTEXT_EXPLICIT_LIMIT || 80),
+  },
   telegram: {
     maxMessageLength: 4096,
     editDebounceMs: 1000,
