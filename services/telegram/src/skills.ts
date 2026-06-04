@@ -38,12 +38,7 @@ const skills: Skill[] = [
   {
     name: 'calendar-checkins',
     status: 'planned',
-    summary: 'Morning and evening check-ins grounded in calendar and message context.',
-  },
-  {
-    name: 'meeting-transcription',
-    status: 'planned',
-    summary: 'Transcribe meeting files and extract action-relevant notes.',
+    summary: 'Morning and evening check-ins grounded in calendar, messages, and recent agent conversations.',
   },
   {
     name: 'playlist-from-image',

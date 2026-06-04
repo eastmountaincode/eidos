@@ -4,12 +4,11 @@ Purpose: maintain a visible, testable inventory of Eidos capabilities.
 
 First skills to model:
 
-- meeting/audio transcription from a file
 - image to Apple Music playlist
 - invoice generation
 - iMessage/SMS ingest
 - calendar event creation
-- calendar check-in
+- morning/evening check-ins
 - portal status
 
 Each skill should have:
@@ -38,5 +37,4 @@ Initial Telegram inventory:
 - `calendar-events`: active
 - `capability-registry`: active
 - `calendar-checkins`: planned
-- `meeting-transcription`: planned
 - `playlist-from-image`: planned

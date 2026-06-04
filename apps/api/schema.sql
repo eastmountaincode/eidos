@@ -201,27 +201,14 @@ INSERT INTO agent_capabilities (
   (
     'calendar-checkins',
     'skill',
-    'Calendar check-ins',
+    'Check-ins',
     'planned',
     'Check-ins',
-    'Morning and evening check-ins grounded in calendar and message context.',
+    'Morning and evening check-ins grounded in calendar, messages, and recent agent conversations.',
     NULL,
     NULL,
-    'Not built yet.',
+    'Not built yet. Morning check-ins should surface schedule, upcoming deadlines, and relevant plans from recent messages. Evening check-ins should look ahead to tomorrow and optionally follow up on unresolved loops from messages or recent conversations. Avoid trivial transactional texts unless they affect plans.',
     200,
-    datetime('now')
-  ),
-  (
-    'meeting-transcription',
-    'skill',
-    'Meeting transcription',
-    'planned',
-    'Media',
-    'Transcribe meeting files and extract action-relevant notes.',
-    NULL,
-    NULL,
-    'Not built yet.',
-    210,
     datetime('now')
   ),
   (
