@@ -87,6 +87,19 @@ def key_for_conversation(raw: str) -> str:
     return re.sub(r"[^a-z0-9@._+-]+", "_", (raw or "unknown").lower())[:180] or "unknown"
 
 
+def conversation_identifiers(job: dict[str, Any]) -> list[str]:
+    identifiers = {
+        str(job.get("conversation_key") or ""),
+        str(job.get("handle") or ""),
+    }
+    for value in list(identifiers):
+        digits = re.sub(r"\D", "", value)
+        if digits:
+            identifiers.add(digits)
+            identifiers.add(f"+{digits}")
+    return sorted(identifier for identifier in identifiers if identifier)
+
+
 def query_messages(chat_db: Path, job: dict[str, Any]) -> list[dict[str, Any]]:
     if not chat_db.exists():
         raise FileNotFoundError(f"Messages database not found: {chat_db}")
@@ -99,6 +112,13 @@ def query_messages(chat_db: Path, job: dict[str, Any]) -> list[dict[str, Any]]:
     if window_days:
       cutoff_clause = "AND m.date > ?"
       params.append(apple_cutoff_ns(int(window_days)))
+
+    identifiers = conversation_identifiers(job)
+    identifier_placeholders = ", ".join("?" for _ in identifiers)
+    conversation_clause = ""
+    if identifiers:
+        conversation_clause = f"AND (h.id IN ({identifier_placeholders}) OR c.chat_identifier IN ({identifier_placeholders}))"
+        params.extend([*identifiers, *identifiers])
 
     limit = max(int(message_limit or 5000), 100)
     params.append(limit)
@@ -121,6 +141,7 @@ def query_messages(chat_db: Path, job: dict[str, Any]) -> list[dict[str, Any]]:
         LEFT JOIN chat c ON cmj.chat_id = c.ROWID
         WHERE (m.text IS NOT NULL AND m.text != '' OR m.attributedBody IS NOT NULL)
           {cutoff_clause}
+          {conversation_clause}
         ORDER BY m.date DESC
         LIMIT ?
     """, params).fetchall()
@@ -145,11 +166,21 @@ def query_messages(chat_db: Path, job: dict[str, Any]) -> list[dict[str, Any]]:
     return list(reversed(messages))
 
 
+def query_latest_messages(chat_db: Path, job: dict[str, Any], limit: int = 100) -> list[dict[str, Any]]:
+    fallback_job = {
+        **job,
+        "window_days": None,
+        "message_limit": limit,
+        "_source_note": "The requested time window had no matching messages, so this uses the latest available local messages for the conversation.",
+    }
+    return query_messages(chat_db, fallback_job)
+
+
 def query_cached_messages(args: argparse.Namespace, job: dict[str, Any]) -> list[dict[str, Any]]:
     limit = int(job.get("message_limit") or 100)
     query = urllib.parse.urlencode({
         "conversation_key": job["conversation_key"],
-        "limit": min(max(limit, 1), 200),
+        "limit": max(limit, 1),
     })
     data = request_json(args.api_url, args.api_token, f"/api/messages/conversation?{query}")
     recent = data.get("recentMessages", [])
@@ -187,6 +218,7 @@ def run_codex(args: argparse.Namespace, job: dict[str, Any], messages: list[dict
 
 Conversation: {job.get('display_name') or job.get('conversation_key')}
 Window: {job.get('window_type')}
+Source note: {job.get('_source_note') or 'Messages matched the requested window.'}
 
 Use the fields this way:
 - summary: 3 to 6 sentences about what happened, what the conversation was circling around, and anything Andrew may want to remember.
@@ -205,6 +237,10 @@ Transcript:
         schema_path.write_text(json.dumps(schema), encoding="utf-8")
         workdir = Path(args.workdir).expanduser()
         workdir.mkdir(parents=True, exist_ok=True)
+        child_env = {
+            **os.environ,
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + os.environ.get("PATH", ""),
+        }
         result = subprocess.run(
             [
                 args.codex_bin,
@@ -224,6 +260,7 @@ Transcript:
             text=True,
             capture_output=True,
             cwd=str(workdir),
+            env=child_env,
             timeout=300,
             check=False,
         )
@@ -249,8 +286,17 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]
         "error": None,
     })
     try:
+        chat_db = Path(args.chat_db).expanduser()
         try:
-            messages = query_messages(Path(args.chat_db).expanduser(), job)
+            messages = query_messages(chat_db, job)
+            if not messages and job.get("window_days"):
+                fallback_messages = query_latest_messages(chat_db, job)
+                if fallback_messages:
+                    job = {
+                        **job,
+                        "_source_note": "The requested time window had no matching messages, so this summary uses the latest available local messages for the conversation.",
+                    }
+                    messages = fallback_messages
         except Exception:
             messages = query_cached_messages(args, job)
         if not messages:
@@ -300,6 +346,7 @@ def process_ingest_request(args: argparse.Namespace, request: dict[str, Any]) ->
             api_token=args.api_token,
             days=30,
             recent_limit=100,
+            conversation_limit=0,
             preview_len=240,
         )
         export_messages(ingest_args)
