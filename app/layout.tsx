@@ -3,8 +3,15 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Eidos Messages",
+  title: "Eidos",
   description: "Eidos portal",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/eidos-icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/eidos-icon.png", type: "image/png", sizes: "512x512" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
