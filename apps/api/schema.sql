@@ -142,7 +142,7 @@ INSERT INTO agent_capabilities (
     'Creates PDF invoices from structured client and line-item details with D1-backed per-client numbering.',
     'python3 ~/.eidos/services/invoices/create_invoice.py --client "CLIENT" --item "Description|hours|rate"',
     'Cloudflare D1: invoice_clients, invoice_records. Local PDF outbox: ~/.eidos/data/outbox/invoices',
-    'Agent-facing tool. If --invoice-number is omitted, the tool reserves the next per-client number, e.g. 001, 002. Use --set-next-number N to seed or correct a client counter.',
+    'Agent-facing tool. If --invoice-number is omitted, the tool reserves a zero-padded per-client number, e.g. 001, 002. Use --set-next-number N to seed or correct a client counter. Private sender details such as Andrew address/payment defaults live in ~/.eidos/data/invoices/config.json.',
     20,
     datetime('now')
   ),
