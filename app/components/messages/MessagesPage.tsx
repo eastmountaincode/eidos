@@ -8,6 +8,7 @@ import { shortSource } from "./format";
 import { SummaryLine } from "./SummaryLine";
 
 type OverviewWindow = 7 | 30;
+type ListLimit = 20 | "all";
 
 async function fetchConversationDetail(conversationKey: string) {
   const response = await fetch(`/api/message-detail?conversation_key=${encodeURIComponent(conversationKey)}`, {
@@ -33,6 +34,7 @@ function remoteTime(value?: string | null) {
 export function MessagesPage({ initialData }: { initialData: MessagesOverview }) {
   const [data, setData] = useState(initialData);
   const [overviewWindow, setOverviewWindow] = useState<OverviewWindow>(30);
+  const [listLimit, setListLimit] = useState<ListLimit>(20);
   const [selectedKey, setSelectedKey] = useState("");
   const [detail, setDetail] = useState<ConversationDetailType | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -212,12 +214,13 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
             </div>
             <div className="flex items-center gap-2">
               <WindowToggle value={overviewWindow} onChange={setOverviewWindow} />
+              <ListLimitToggle value={listLimit} onChange={setListLimit} />
               <span className="rounded-full bg-[#dff3e8] px-2 py-1 text-[11px] font-bold text-[#166534]">{data.status}</span>
             </div>
           </div>
           <div className="overflow-x-auto">
             <div className="min-w-[560px]">
-              <PeopleTable conversations={data.topConversations} onSelect={setSelectedKey} selectedKey={selectedKey} />
+              <PeopleTable conversations={data.topConversations} limit={listLimit} onSelect={setSelectedKey} selectedKey={selectedKey} />
             </div>
           </div>
         </section>
@@ -241,6 +244,21 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
   );
 }
 
+function ListLimitToggle({
+  onChange,
+  value,
+}: {
+  value: ListLimit;
+  onChange: (value: ListLimit) => void;
+}) {
+  const options: Array<{ label: string; value: ListLimit }> = [
+    { label: "Top 20", value: 20 },
+    { label: "All", value: "all" },
+  ];
+
+  return <SegmentedToggle options={options} value={value} onChange={onChange} />;
+}
+
 function WindowToggle({
   onChange,
   value,
@@ -253,6 +271,18 @@ function WindowToggle({
     { label: "Last 30 days", value: 30 },
   ];
 
+  return <SegmentedToggle options={options} value={value} onChange={onChange} />;
+}
+
+function SegmentedToggle<T extends string | number>({
+  onChange,
+  options,
+  value,
+}: {
+  options: Array<{ label: string; value: T }>;
+  value: T;
+  onChange: (value: T) => void;
+}) {
   return (
     <div className="inline-flex h-7 rounded-md border border-border bg-[#f7fafa] p-0.5">
       {options.map((option) => {
@@ -262,7 +292,7 @@ function WindowToggle({
             className={`rounded px-2 text-[11px] font-bold ${
               isActive ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
             }`}
-            key={option.value}
+            key={String(option.value)}
             onClick={() => onChange(option.value)}
             type="button"
           >

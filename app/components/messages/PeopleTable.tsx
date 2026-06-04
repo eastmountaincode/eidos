@@ -1,12 +1,13 @@
 "use client";
 
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Conversation } from "@/types/messages";
 import { formatNumber, formatShortDate } from "./format";
 
 type PeopleTableProps = {
   conversations: Conversation[];
+  limit: 20 | "all";
   selectedKey: string;
   onSelect: (conversationKey: string) => void;
 };
@@ -23,7 +24,7 @@ const columns: Array<{ key: SortKey; label: string; title: string }> = [
   { key: "last_active", label: "Last active", title: "Sort by last active time" },
 ];
 
-export function PeopleTable({ conversations, selectedKey, onSelect }: PeopleTableProps) {
+export function PeopleTable({ conversations, limit, selectedKey, onSelect }: PeopleTableProps) {
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: "messages",
     direction: "desc",
@@ -33,6 +34,16 @@ export function PeopleTable({ conversations, selectedKey, onSelect }: PeopleTabl
     () => sortConversations(conversations, sort.key, sort.direction),
     [conversations, sort],
   );
+  const visibleConversations = useMemo(
+    () => (limit === "all" ? sortedConversations : sortedConversations.slice(0, limit)),
+    [limit, sortedConversations],
+  );
+
+  useEffect(() => {
+    if (selectedKey && !visibleConversations.some((conversation) => conversation.conversation_key === selectedKey)) {
+      onSelect("");
+    }
+  }, [onSelect, selectedKey, visibleConversations]);
 
   if (!conversations.length) {
     return <p className="rounded-lg border border-dashed border-border bg-white/60 p-4 text-sm text-muted">No conversations ingested yet.</p>;
@@ -59,7 +70,7 @@ export function PeopleTable({ conversations, selectedKey, onSelect }: PeopleTabl
           />
         ))}
       </div>
-      {sortedConversations.map((conversation, index) => (
+      {visibleConversations.map((conversation, index) => (
         <PersonRow
           conversation={conversation}
           index={index}
