@@ -42,6 +42,15 @@ export default {
       return getCapabilities(env);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/checkins/runs') {
+      return getCheckinRuns(env, url);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/checkins/runs') {
+      const payload = await request.json();
+      return upsertCheckinRun(env, payload);
+    }
+
     const capabilityMatch = url.pathname.match(/^\/api\/capabilities\/([^/]+)$/);
     if (request.method === 'POST' && capabilityMatch) {
       const payload = await request.json();
@@ -132,6 +141,147 @@ async function getCapabilities(env) {
   `).all();
 
   return json({ capabilities: capabilities.results });
+}
+
+async function getCheckinRuns(env, url) {
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 10), 1), 50);
+  const kind = url.searchParams.get('kind') || '';
+  const status = url.searchParams.get('status') || '';
+  const filters = [];
+  const bindings = [];
+
+  if (kind === 'morning' || kind === 'evening') {
+    filters.push('kind = ?');
+    bindings.push(kind);
+  }
+
+  if (status) {
+    filters.push('status = ?');
+    bindings.push(status);
+  }
+
+  const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const runs = await env.DB.prepare(`
+    SELECT
+      id,
+      kind,
+      status,
+      scheduled_for,
+      started_at,
+      completed_at,
+      title,
+      body,
+      calendar_context_json,
+      message_context_json,
+      model,
+      error,
+      created_at,
+      updated_at
+    FROM checkin_runs
+    ${whereClause}
+    ORDER BY started_at DESC
+    LIMIT ?
+  `).bind(...bindings, limit).all();
+
+  return json({ runs: runs.results.map(normalizeCheckinRun) });
+}
+
+async function upsertCheckinRun(env, payload) {
+  const kind = normalizeCheckinKind(payload.kind);
+  const status = normalizeCheckinStatus(payload.status);
+  const id = cleanOptionalString(payload.id) || crypto.randomUUID();
+  const calendarJson = payload.calendar_context_json
+    ? String(payload.calendar_context_json)
+    : payload.calendar_context
+      ? JSON.stringify(payload.calendar_context)
+      : null;
+  const messageJson = payload.message_context_json
+    ? String(payload.message_context_json)
+    : payload.message_context
+      ? JSON.stringify(payload.message_context)
+      : null;
+
+  await env.DB.prepare(`
+    INSERT INTO checkin_runs (
+      id,
+      kind,
+      status,
+      scheduled_for,
+      started_at,
+      completed_at,
+      title,
+      body,
+      calendar_context_json,
+      message_context_json,
+      model,
+      error,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      kind = excluded.kind,
+      status = excluded.status,
+      scheduled_for = COALESCE(excluded.scheduled_for, checkin_runs.scheduled_for),
+      started_at = COALESCE(excluded.started_at, checkin_runs.started_at),
+      completed_at = COALESCE(excluded.completed_at, checkin_runs.completed_at),
+      title = COALESCE(excluded.title, checkin_runs.title),
+      body = COALESCE(excluded.body, checkin_runs.body),
+      calendar_context_json = COALESCE(excluded.calendar_context_json, checkin_runs.calendar_context_json),
+      message_context_json = COALESCE(excluded.message_context_json, checkin_runs.message_context_json),
+      model = COALESCE(excluded.model, checkin_runs.model),
+      error = excluded.error,
+      updated_at = datetime('now')
+  `).bind(
+    id,
+    kind,
+    status,
+    cleanOptionalString(payload.scheduled_for),
+    cleanOptionalString(payload.started_at),
+    cleanOptionalString(payload.completed_at),
+    cleanOptionalString(payload.title),
+    cleanOptionalString(payload.body),
+    calendarJson,
+    messageJson,
+    cleanOptionalString(payload.model),
+    cleanOptionalString(payload.error),
+  ).run();
+
+  const run = await env.DB.prepare(`
+    SELECT *
+    FROM checkin_runs
+    WHERE id = ?
+  `).bind(id).first();
+
+  return json({ run: normalizeCheckinRun(run) }, status === 'running' ? 202 : 200);
+}
+
+function normalizeCheckinKind(value) {
+  return value === 'morning' ? 'morning' : 'evening';
+}
+
+function normalizeCheckinStatus(value) {
+  if (value === 'completed') return 'completed';
+  if (value === 'failed') return 'failed';
+  if (value === 'skipped') return 'skipped';
+  return 'running';
+}
+
+function normalizeCheckinRun(run) {
+  if (!run) return null;
+  return {
+    ...run,
+    calendar_context: parseJsonField(run.calendar_context_json, null),
+    message_context: parseJsonField(run.message_context_json, null),
+  };
+}
+
+function parseJsonField(value, fallback) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
 }
 
 async function updateCapability(env, id, payload) {

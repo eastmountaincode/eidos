@@ -117,6 +117,26 @@ CREATE TABLE IF NOT EXISTS invoice_records (
 CREATE INDEX IF NOT EXISTS idx_invoice_records_client ON invoice_records(client_key, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_records_client_number ON invoice_records(client_key, invoice_number);
 
+CREATE TABLE IF NOT EXISTS checkin_runs (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('morning', 'evening')),
+  status TEXT NOT NULL DEFAULT 'running',
+  scheduled_for TEXT,
+  started_at TEXT DEFAULT (datetime('now')),
+  completed_at TEXT,
+  title TEXT,
+  body TEXT,
+  calendar_context_json TEXT,
+  message_context_json TEXT,
+  model TEXT,
+  error TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_checkin_runs_kind_started ON checkin_runs(kind, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_checkin_runs_status_started ON checkin_runs(status, started_at DESC);
+
 INSERT INTO agent_capabilities (
   id, kind, name, status, category, summary, invocation, data_source, notes, sort_order, updated_at
 ) VALUES
@@ -202,12 +222,12 @@ INSERT INTO agent_capabilities (
     'calendar-checkins',
     'skill',
     'Check-ins',
-    'planned',
+    'active',
     'Check-ins',
     'Morning and evening check-ins grounded in calendar, messages, and recent agent conversations.',
-    NULL,
-    NULL,
-    'Not built yet. Morning check-ins should surface schedule, upcoming deadlines, and relevant plans from recent messages. Evening check-ins should look ahead to tomorrow and optionally follow up on unresolved loops from messages or recent conversations. Avoid trivial transactional texts unless they affect plans.',
+    'launchd ai.eidos.checkins -> python3 ~/.eidos/services/checkins/send_checkin.py --kind auto',
+    'Cloudflare D1: checkin_runs, message tables. Apple Calendar via EventKit when permission is available. Telegram Bot API.',
+    'Runs morning and evening. Morning check-ins should surface schedule, upcoming deadlines, and relevant plans from recent messages. Evening check-ins should look ahead to tomorrow and optionally follow up on unresolved loops from messages or recent agent conversations. Avoid trivial transactional texts unless they affect plans.',
     200,
     datetime('now')
   ),

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>ai.eidos.checkins</string>
+    <key>Comment</key>
+    <string>Eidos morning and evening check-ins</string>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <key>StartCalendarInterval</key>
+    <array>
+      <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+      </dict>
+      <dict>
+        <key>Hour</key>
+        <integer>20</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+      </dict>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/oasis/.eidos/services/checkins</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/usr/bin/python3</string>
+      <string>/Users/oasis/.eidos/services/checkins/send_checkin.py</string>
+      <string>--kind</string>
+      <string>auto</string>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/oasis/.eidos/logs/checkins.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/oasis/.eidos/logs/checkins.err.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>HOME</key>
+      <string>/Users/oasis</string>
+      <key>USER</key>
+      <string>oasis</string>
+      <key>LOGNAME</key>
+      <string>oasis</string>
+      <key>SHELL</key>
+      <string>/bin/zsh</string>
+      <key>EIDOS_HOME</key>
+      <string>/Users/oasis/.eidos</string>
+      <key>PATH</key>
+      <string>/Users/oasis/.local/bin:/Users/oasis/.npm-global/bin:/Users/oasis/bin:/Users/oasis/.volta/bin:/Users/oasis/.bun/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+  </dict>
+</plist>

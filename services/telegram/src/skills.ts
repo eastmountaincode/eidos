@@ -37,8 +37,8 @@ const skills: Skill[] = [
   },
   {
     name: 'calendar-checkins',
-    status: 'planned',
-    summary: 'Morning and evening check-ins grounded in calendar, messages, and recent agent conversations.',
+    status: 'active',
+    summary: 'Send morning and evening Telegram check-ins grounded in calendar, messages, and recent agent context.',
   },
   {
     name: 'playlist-from-image',
