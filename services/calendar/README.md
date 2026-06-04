@@ -5,7 +5,7 @@ Purpose: add events to Andrew's Apple Calendar from structured event details.
 Current permission state: the tool is installed, but macOS Calendar permission must be granted to:
 
 ```text
-~/.eidos/services/calendar/calendar_event_writer
+~/Applications/EidosCalendarWriter.app
 ```
 
 Default calendar:
@@ -47,4 +47,20 @@ After changing or testing this tool, update the capability registry:
 
 ```sh
 python3 ~/.eidos/services/skills/update_capability.py --id "calendar-events"
+```
+
+Build the signed helper app:
+
+```sh
+cd ~/.eidos/services/calendar
+mkdir -p ~/Applications/EidosCalendarWriter.app/Contents/MacOS
+cp CalendarWriter-Info.plist ~/Applications/EidosCalendarWriter.app/Contents/Info.plist
+/usr/bin/swiftc \
+  -Xlinker -sectcreate \
+  -Xlinker __TEXT \
+  -Xlinker __info_plist \
+  -Xlinker CalendarWriter-Info.plist \
+  -o ~/Applications/EidosCalendarWriter.app/Contents/MacOS/calendar_event_writer \
+  calendar_event_writer.swift
+codesign --force --deep --sign - ~/Applications/EidosCalendarWriter.app
 ```

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundleIdentifier</key>
+    <string>ai.eidos.calendar-writer</string>
+    <key>CFBundleExecutable</key>
+    <string>calendar_event_writer</string>
+    <key>CFBundleName</key>
+    <string>Eidos Calendar Writer</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Eidos writes event details to Apple Calendar when Andrew asks it to add something.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Eidos writes event details to Apple Calendar when Andrew asks it to add something.</string>
+  </dict>
+</plist>

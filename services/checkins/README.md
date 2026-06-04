@@ -65,11 +65,20 @@ Calendar reader:
 
 ```sh
 cd ~/.eidos/services/checkins
-/usr/bin/swiftc -o calendar_reader calendar_reader.swift
+mkdir -p ~/Applications/EidosCalendarReader.app/Contents/MacOS
+cp CalendarReader-Info.plist ~/Applications/EidosCalendarReader.app/Contents/Info.plist
+/usr/bin/swiftc \
+  -Xlinker -sectcreate \
+  -Xlinker __TEXT \
+  -Xlinker __info_plist \
+  -Xlinker CalendarReader-Info.plist \
+  -o ~/Applications/EidosCalendarReader.app/Contents/MacOS/calendar_reader \
+  calendar_reader.swift
+codesign --force --deep --sign - ~/Applications/EidosCalendarReader.app
 ```
 
 If Calendar access is denied, the check-in still runs from messages and recent Eidos notes, but calendar grounding will be incomplete until macOS permission is granted to:
 
 ```text
-~/.eidos/services/checkins/calendar_reader
+~/Applications/EidosCalendarReader.app
 ```

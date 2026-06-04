@@ -113,6 +113,12 @@ def event_from_args(args: argparse.Namespace) -> CalendarEvent:
 def writer_command(args: list[str]) -> list[str]:
     script_path = Path(__file__).with_name("calendar_event_writer.swift")
     binary_path = Path(__file__).with_name("calendar_event_writer")
+    applications_binary_path = Path.home() / "Applications/EidosCalendarWriter.app/Contents/MacOS/calendar_event_writer"
+    app_binary_path = Path(__file__).with_name("EidosCalendarWriter.app") / "Contents/MacOS/calendar_event_writer"
+    if applications_binary_path.exists():
+        return [str(applications_binary_path), *args]
+    if app_binary_path.exists():
+        return [str(app_binary_path), *args]
     if binary_path.exists():
         return [str(binary_path), *args]
     return ["/usr/bin/swift", str(script_path), *args]

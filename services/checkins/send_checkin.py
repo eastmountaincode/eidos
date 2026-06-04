@@ -151,7 +151,16 @@ def parse_iso(value: str) -> datetime | None:
 def read_calendar_context(start: datetime, end: datetime) -> dict[str, Any]:
     script_path = Path(__file__).with_name("calendar_reader.swift")
     binary_path = Path(__file__).with_name("calendar_reader")
-    command = [str(binary_path)] if binary_path.exists() else ["/usr/bin/swift", str(script_path)]
+    applications_binary_path = Path.home() / "Applications/EidosCalendarReader.app/Contents/MacOS/calendar_reader"
+    app_binary_path = Path(__file__).with_name("EidosCalendarReader.app") / "Contents/MacOS/calendar_reader"
+    if applications_binary_path.exists():
+        command = [str(applications_binary_path)]
+    elif app_binary_path.exists():
+        command = [str(app_binary_path)]
+    elif binary_path.exists():
+        command = [str(binary_path)]
+    else:
+        command = ["/usr/bin/swift", str(script_path)]
     command.extend([
         "--start-epoch",
         str(start.timestamp()),
