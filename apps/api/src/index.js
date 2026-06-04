@@ -35,7 +35,7 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/messages/overview') {
-      return getMessagesOverview(env);
+      return getMessagesOverview(env, url);
     }
 
     if (request.method === 'GET' && url.pathname === '/api/capabilities') {
@@ -109,13 +109,34 @@ async function getCapabilities(env) {
   return json({ capabilities: capabilities.results });
 }
 
-async function getMessagesOverview(env) {
+async function getMessagesOverview(env, url) {
+  const windowDays = normalizeOverviewWindow(url.searchParams.get('window_days'));
   const latestRun = await env.DB.prepare(`
     SELECT * FROM message_sync_runs
     ORDER BY exported_at DESC
     LIMIT 1
   `).first();
 
+  const overview = windowDays === 7
+    ? await getCachedMessageWindow(env, latestRun, windowDays)
+    : await getStoredMessageWindow(env, latestRun);
+
+  const latestIngestRequest = await env.DB.prepare(`
+    SELECT *
+    FROM message_ingest_requests
+    ORDER BY requested_at DESC
+    LIMIT 1
+  `).first();
+
+  return json({
+    status: latestRun ? 'active' : 'pending',
+    latestRun: overview.run,
+    latestIngestRequest,
+    topConversations: overview.conversations,
+  });
+}
+
+async function getStoredMessageWindow(env, latestRun) {
   const top = await env.DB.prepare(`
     SELECT
       conversation_key,
@@ -130,19 +151,58 @@ async function getMessagesOverview(env) {
     ORDER BY message_count DESC, last_active DESC
   `).all();
 
-  const latestIngestRequest = await env.DB.prepare(`
-    SELECT *
-    FROM message_ingest_requests
-    ORDER BY requested_at DESC
-    LIMIT 1
-  `).first();
+  return {
+    run: latestRun,
+    conversations: top.results,
+  };
+}
 
-  return json({
-    status: latestRun ? 'active' : 'pending',
-    latestRun,
-    latestIngestRequest,
-    topConversations: top.results,
-  });
+async function getCachedMessageWindow(env, latestRun, windowDays) {
+  const conversations = await env.DB.prepare(`
+    SELECT
+      c.conversation_key,
+      c.display_name,
+      c.handle,
+      c.chat_type,
+      COUNT(*) AS message_count,
+      SUM(CASE WHEN i.direction = 'sent' THEN 1 ELSE 0 END) AS sent_count,
+      SUM(CASE WHEN i.direction != 'sent' THEN 1 ELSE 0 END) AS received_count,
+      MAX(i.timestamp) AS last_active
+    FROM message_items i
+    JOIN message_conversations c ON c.conversation_key = i.conversation_key
+    WHERE datetime(i.timestamp) >= datetime('now', ?)
+    GROUP BY c.conversation_key, c.display_name, c.handle, c.chat_type
+    HAVING message_count > 0
+    ORDER BY message_count DESC, last_active DESC
+  `).bind(`-${windowDays} days`).all();
+
+  const stats = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS total_messages,
+      SUM(CASE WHEN direction = 'sent' THEN 1 ELSE 0 END) AS sent_messages,
+      SUM(CASE WHEN direction != 'sent' THEN 1 ELSE 0 END) AS received_messages,
+      COUNT(DISTINCT conversation_key) AS conversation_count,
+      MAX(timestamp) AS last_message_at
+    FROM message_items
+    WHERE datetime(timestamp) >= datetime('now', ?)
+  `).bind(`-${windowDays} days`).first();
+
+  return {
+    run: {
+      ...(latestRun || {}),
+      window_days: windowDays,
+      total_messages: stats?.total_messages || 0,
+      sent_messages: stats?.sent_messages || 0,
+      received_messages: stats?.received_messages || 0,
+      conversation_count: stats?.conversation_count || conversations.results.length,
+      last_message_at: stats?.last_message_at || null,
+    },
+    conversations: conversations.results,
+  };
+}
+
+function normalizeOverviewWindow(value) {
+  return Number(value) === 7 ? 7 : 30;
 }
 
 async function getMessageConversations(env, url) {

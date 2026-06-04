@@ -31,8 +31,9 @@ async function workerFetch<T>(path: string, init: RequestInit = {}): Promise<T> 
   return response.json() as Promise<T>;
 }
 
-export function getMessagesOverview() {
-  return workerFetch<MessagesOverview>("/api/messages/overview");
+export function getMessagesOverview(windowDays = 30) {
+  const query = new URLSearchParams({ window_days: String(windowDays) });
+  return workerFetch<MessagesOverview>(`/api/messages/overview?${query}`);
 }
 
 export function getCapabilities() {

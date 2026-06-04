@@ -7,6 +7,8 @@ import { PeopleTable } from "./PeopleTable";
 import { shortSource } from "./format";
 import { SummaryLine } from "./SummaryLine";
 
+type OverviewWindow = 7 | 30;
+
 async function fetchConversationDetail(conversationKey: string) {
   const response = await fetch(`/api/message-detail?conversation_key=${encodeURIComponent(conversationKey)}`, {
     cache: "no-store",
@@ -15,8 +17,8 @@ async function fetchConversationDetail(conversationKey: string) {
   return response.json() as Promise<ConversationDetailType>;
 }
 
-async function fetchMessagesOverview() {
-  const response = await fetch("/api/messages", { cache: "no-store" });
+async function fetchMessagesOverview(windowDays: OverviewWindow) {
+  const response = await fetch(`/api/messages?window_days=${windowDays}`, { cache: "no-store" });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json() as Promise<MessagesOverview>;
 }
@@ -30,12 +32,33 @@ function remoteTime(value?: string | null) {
 
 export function MessagesPage({ initialData }: { initialData: MessagesOverview }) {
   const [data, setData] = useState(initialData);
+  const [overviewWindow, setOverviewWindow] = useState<OverviewWindow>(30);
   const [selectedKey, setSelectedKey] = useState("");
   const [detail, setDetail] = useState<ConversationDetailType | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [isRequestingSummary, setIsRequestingSummary] = useState(false);
   const [isRequestingIngest, setIsRequestingIngest] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchMessagesOverview(overviewWindow)
+      .then((nextData) => {
+        if (cancelled) return;
+        setData(nextData);
+        if (selectedKey && !nextData.topConversations.some((conversation) => conversation.conversation_key === selectedKey)) {
+          setSelectedKey("");
+          setDetail(null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setDetailError(`Could not load ${overviewWindow}d message window: ${String(error)}`);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [overviewWindow]);
 
   useEffect(() => {
     if (!selectedKey) return;
@@ -88,7 +111,7 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
 
     let cancelled = false;
     const interval = window.setInterval(() => {
-      fetchMessagesOverview()
+      fetchMessagesOverview(overviewWindow)
         .then((nextData) => {
           if (cancelled) return;
           setData(nextData);
@@ -115,7 +138,7 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [data.latestIngestRequest?.status, isRequestingIngest, selectedKey]);
+  }, [data.latestIngestRequest?.status, isRequestingIngest, overviewWindow, selectedKey]);
 
   async function requestSummary(windowType: SummaryWindow) {
     if (!selectedKey) return;
@@ -149,7 +172,7 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
         method: "POST",
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setData(await fetchMessagesOverview());
+      setData(await fetchMessagesOverview(overviewWindow));
     } catch (error) {
       setIsRequestingIngest(false);
       setDetailError(`Ingest request failed: ${String(error)}`);
@@ -157,7 +180,7 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
   }
 
   const run = data.latestRun;
-  const windowDays = run?.window_days ?? 30;
+  const windowDays = run?.window_days ?? overviewWindow;
   const ingestStatus = data.latestIngestRequest?.status;
   const isIngesting = isRequestingIngest || ["queued", "running"].includes(ingestStatus || "");
   const ingestFailed = ingestStatus === "failed"
@@ -187,7 +210,10 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
               <h3 className="text-sm font-bold">People</h3>
               <p className="text-sm text-muted">Last {windowDays} days.</p>
             </div>
-            <span className="rounded-full bg-[#dff3e8] px-2 py-1 text-[11px] font-bold text-[#166534]">{data.status}</span>
+            <div className="flex items-center gap-2">
+              <WindowToggle value={overviewWindow} onChange={setOverviewWindow} />
+              <span className="rounded-full bg-[#dff3e8] px-2 py-1 text-[11px] font-bold text-[#166534]">{data.status}</span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <div className="min-w-[560px]">
@@ -211,6 +237,39 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
         <span>Cloudflare D1</span>
         <span>{shortSource(run?.source)}</span>
       </section>
+    </div>
+  );
+}
+
+function WindowToggle({
+  onChange,
+  value,
+}: {
+  value: OverviewWindow;
+  onChange: (value: OverviewWindow) => void;
+}) {
+  const options: Array<{ label: string; value: OverviewWindow }> = [
+    { label: "Last week", value: 7 },
+    { label: "Last 30 days", value: 30 },
+  ];
+
+  return (
+    <div className="inline-flex h-7 rounded-md border border-border bg-[#f7fafa] p-0.5">
+      {options.map((option) => {
+        const isActive = option.value === value;
+        return (
+          <button
+            className={`rounded px-2 text-[11px] font-bold ${
+              isActive ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
+            }`}
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            type="button"
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
