@@ -66,12 +66,25 @@ function CapabilityCard({ capability }: { capability: AgentCapability }) {
       <p className="text-sm leading-snug text-muted">{capability.summary}</p>
 
       <dl className="grid gap-1.5 text-xs">
+        {capability.updated_at ? <MetaRow label="Updated" value={formatUpdatedAt(capability.updated_at)} /> : null}
         {capability.data_source ? <MetaRow label="Source" value={capability.data_source} /> : null}
         {capability.invocation ? <MetaRow code label="Invocation" value={capability.invocation} /> : null}
         {capability.notes ? <MetaRow label="Notes" value={capability.notes} /> : null}
       </dl>
     </article>
   );
+}
+
+function formatUpdatedAt(value: string) {
+  const normalized = /^\d{4}-\d{2}-\d{2} /.test(value) ? `${value.replace(" ", "T")}Z` : value;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function MetaRow({ code = false, label, value }: { code?: boolean; label: string; value: string }) {
