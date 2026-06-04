@@ -16,9 +16,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-bg text-ink md:grid md:grid-cols-[236px_minmax(0,1fr)]">
       <aside className="sticky top-0 z-10 bg-sidebar px-3.5 py-4 text-white md:min-h-screen">
-        <div className="border-b border-white/10 px-1.5 pb-4 pt-1">
+        <div className="border-b border-white/10 px-2.5 pb-4 pt-1">
           <h1
-            className="block w-full whitespace-nowrap text-[44px] font-bold leading-[1.05]"
+            className="block w-full whitespace-nowrap text-[40px] font-bold leading-[1.05]"
             style={{ fontFamily: "\"Vaxen Rounded\", \"VaxenRounded\", ui-sans-serif, system-ui, sans-serif" }}
           >
             Eidos
