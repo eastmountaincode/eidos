@@ -92,6 +92,31 @@ CREATE TABLE IF NOT EXISTS agent_capabilities (
 
 CREATE INDEX IF NOT EXISTS idx_agent_capabilities_kind ON agent_capabilities(kind, sort_order, name);
 
+CREATE TABLE IF NOT EXISTS invoice_clients (
+  client_key TEXT PRIMARY KEY,
+  client_name TEXT NOT NULL,
+  next_invoice_number INTEGER NOT NULL DEFAULT 1 CHECK (next_invoice_number >= 1),
+  last_invoice_number INTEGER NOT NULL DEFAULT 0 CHECK (last_invoice_number >= 0),
+  invoice_digits INTEGER NOT NULL DEFAULT 3 CHECK (invoice_digits >= 1 AND invoice_digits <= 12),
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS invoice_records (
+  id TEXT PRIMARY KEY,
+  client_key TEXT NOT NULL,
+  client_name TEXT NOT NULL,
+  invoice_number TEXT NOT NULL,
+  invoice_number_int INTEGER,
+  total REAL,
+  pdf_path TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (client_key) REFERENCES invoice_clients(client_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_records_client ON invoice_records(client_key, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_records_client_number ON invoice_records(client_key, invoice_number);
+
 INSERT INTO agent_capabilities (
   id, kind, name, status, category, summary, invocation, data_source, notes, sort_order, updated_at
 ) VALUES
@@ -114,10 +139,10 @@ INSERT INTO agent_capabilities (
     'Invoice generator',
     'active',
     'Creation',
-    'Creates PDF invoices from structured client and line-item details.',
+    'Creates PDF invoices from structured client and line-item details with D1-backed per-client numbering.',
     'python3 ~/.eidos/services/invoices/create_invoice.py --client "CLIENT" --item "Description|hours|rate"',
-    'Local PDF outbox: ~/.eidos/data/outbox/invoices',
-    'Agent-facing tool. Ask for missing invoice details, run the command, then include the returned pdf_path so Telegram can send the document.',
+    'Cloudflare D1: invoice_clients, invoice_records. Local PDF outbox: ~/.eidos/data/outbox/invoices',
+    'Agent-facing tool. If --invoice-number is omitted, the tool reserves the next per-client number, e.g. 001, 002. Use --set-next-number N to seed or correct a client counter.',
     20,
     datetime('now')
   ),

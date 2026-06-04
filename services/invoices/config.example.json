@@ -4,5 +4,7 @@
   "payment_lines": [
     "Payment method goes here"
   ],
-  "output_dir": "~/.eidos/data/outbox/invoices"
+  "output_dir": "~/.eidos/data/outbox/invoices",
+  "api_url": "https://your-eidos-worker.example.workers.dev",
+  "api_token": "optional-if-env-var-is-set"
 }

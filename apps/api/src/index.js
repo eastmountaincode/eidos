@@ -42,6 +42,25 @@ export default {
       return getCapabilities(env);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/invoices/clients') {
+      return getInvoiceClients(env);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/invoices/client-counter') {
+      const payload = await request.json();
+      return setInvoiceClientCounter(env, payload);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/invoices/reserve-number') {
+      const payload = await request.json();
+      return reserveInvoiceNumber(env, payload);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/invoices/records') {
+      const payload = await request.json();
+      return recordInvoice(env, payload);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/messages/conversations') {
       return getMessageConversations(env, url);
     }
@@ -107,6 +126,202 @@ async function getCapabilities(env) {
   `).all();
 
   return json({ capabilities: capabilities.results });
+}
+
+async function getInvoiceClients(env) {
+  const clients = await env.DB.prepare(`
+    SELECT
+      client_key,
+      client_name,
+      next_invoice_number,
+      last_invoice_number,
+      invoice_digits,
+      created_at,
+      updated_at
+    FROM invoice_clients
+    ORDER BY client_name ASC
+  `).all();
+
+  return json({ clients: clients.results.map(withFormattedInvoiceNumbers) });
+}
+
+async function setInvoiceClientCounter(env, payload) {
+  const clientName = cleanRequiredString(payload.client || payload.client_name, 'client');
+  if (clientName.error) return clientName.error;
+
+  const nextNumber = parsePositiveInteger(payload.next_invoice_number || payload.next_number || payload.next, 1);
+  if (!nextNumber) return json({ error: 'next_invoice_number must be a positive integer' }, 400);
+
+  const invoiceDigits = parseInvoiceDigits(payload.invoice_digits);
+  const clientKey = keyForInvoiceClient(clientName.value);
+
+  await env.DB.prepare(`
+    INSERT INTO invoice_clients (
+      client_key, client_name, next_invoice_number, last_invoice_number, invoice_digits, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(client_key) DO UPDATE SET
+      client_name = excluded.client_name,
+      next_invoice_number = excluded.next_invoice_number,
+      last_invoice_number = excluded.next_invoice_number - 1,
+      invoice_digits = excluded.invoice_digits,
+      updated_at = datetime('now')
+  `).bind(clientKey, clientName.value, nextNumber, nextNumber - 1, invoiceDigits).run();
+
+  const client = await env.DB.prepare(`
+    SELECT *
+    FROM invoice_clients
+    WHERE client_key = ?
+  `).bind(clientKey).first();
+
+  return json({ client: withFormattedInvoiceNumbers(client) });
+}
+
+async function reserveInvoiceNumber(env, payload) {
+  const clientName = cleanRequiredString(payload.client || payload.client_name, 'client');
+  if (clientName.error) return clientName.error;
+
+  const requestedDigits = parseInvoiceDigits(payload.invoice_digits);
+  const clientKey = keyForInvoiceClient(clientName.value);
+
+  await env.DB.prepare(`
+    INSERT INTO invoice_clients (
+      client_key, client_name, next_invoice_number, last_invoice_number, invoice_digits, created_at, updated_at
+    ) VALUES (?, ?, 1, 0, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(client_key) DO UPDATE SET
+      client_name = excluded.client_name,
+      invoice_digits = excluded.invoice_digits,
+      updated_at = datetime('now')
+  `).bind(clientKey, clientName.value, requestedDigits).run();
+
+  const client = await env.DB.prepare(`
+    UPDATE invoice_clients
+    SET
+      last_invoice_number = next_invoice_number,
+      next_invoice_number = next_invoice_number + 1,
+      updated_at = datetime('now')
+    WHERE client_key = ?
+    RETURNING *
+  `).bind(clientKey).first();
+
+  const invoiceNumberInt = Number(client.last_invoice_number);
+  const invoiceNumber = formatInvoiceNumber(invoiceNumberInt, client.invoice_digits);
+
+  return json({
+    client: withFormattedInvoiceNumbers(client),
+    invoice_number: invoiceNumber,
+    invoice_number_int: invoiceNumberInt,
+  }, 201);
+}
+
+async function recordInvoice(env, payload) {
+  const clientName = cleanRequiredString(payload.client || payload.client_name, 'client');
+  if (clientName.error) return clientName.error;
+
+  const invoiceNumber = String(payload.invoice_number || '').trim();
+  if (!invoiceNumber) return json({ error: 'missing invoice_number' }, 400);
+
+  const invoiceNumberInt = parseInvoiceNumberInt(payload.invoice_number_int, invoiceNumber);
+  const invoiceDigits = parseInvoiceDigits(payload.invoice_digits);
+  const clientKey = keyForInvoiceClient(clientName.value);
+  const total = payload.total === undefined || payload.total === null ? null : Number(payload.total);
+  const pdfPath = payload.pdf_path ? String(payload.pdf_path) : null;
+
+  await env.DB.prepare(`
+    INSERT INTO invoice_clients (
+      client_key, client_name, next_invoice_number, last_invoice_number, invoice_digits, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(client_key) DO UPDATE SET
+      client_name = excluded.client_name,
+      next_invoice_number = CASE
+        WHEN excluded.next_invoice_number > next_invoice_number THEN excluded.next_invoice_number
+        ELSE next_invoice_number
+      END,
+      last_invoice_number = CASE
+        WHEN excluded.last_invoice_number > last_invoice_number THEN excluded.last_invoice_number
+        ELSE last_invoice_number
+      END,
+      invoice_digits = excluded.invoice_digits,
+      updated_at = datetime('now')
+  `).bind(
+    clientKey,
+    clientName.value,
+    invoiceNumberInt ? invoiceNumberInt + 1 : 1,
+    invoiceNumberInt || 0,
+    invoiceDigits,
+  ).run();
+
+  const id = crypto.randomUUID();
+  await env.DB.prepare(`
+    INSERT INTO invoice_records (
+      id, client_key, client_name, invoice_number, invoice_number_int, total, pdf_path, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(client_key, invoice_number) DO UPDATE SET
+      client_name = excluded.client_name,
+      invoice_number_int = excluded.invoice_number_int,
+      total = excluded.total,
+      pdf_path = excluded.pdf_path
+  `).bind(id, clientKey, clientName.value, invoiceNumber, invoiceNumberInt, total, pdfPath).run();
+
+  const record = await env.DB.prepare(`
+    SELECT *
+    FROM invoice_records
+    WHERE client_key = ? AND invoice_number = ?
+  `).bind(clientKey, invoiceNumber).first();
+  const client = await env.DB.prepare(`
+    SELECT *
+    FROM invoice_clients
+    WHERE client_key = ?
+  `).bind(clientKey).first();
+
+  return json({ record, client: withFormattedInvoiceNumbers(client) }, 201);
+}
+
+function cleanRequiredString(value, field) {
+  const cleaned = String(value || '').trim();
+  if (!cleaned) return { error: json({ error: `missing ${field}` }, 400) };
+  return { value: cleaned };
+}
+
+function keyForInvoiceClient(value) {
+  return String(value || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 160) || 'unknown';
+}
+
+function parseInvoiceDigits(value) {
+  const parsed = Number(value || 3);
+  if (!Number.isFinite(parsed)) return 3;
+  return Math.min(Math.max(Math.floor(parsed), 1), 12);
+}
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number(value || fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  const integer = Math.floor(parsed);
+  return integer >= 1 ? integer : null;
+}
+
+function parseInvoiceNumberInt(value, invoiceNumber) {
+  if (value !== undefined && value !== null && value !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 1) return Math.floor(parsed);
+  }
+
+  const digits = String(invoiceNumber || '').match(/\d+/g);
+  if (!digits?.length) return null;
+  const parsed = Number(digits[digits.length - 1]);
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : null;
+}
+
+function formatInvoiceNumber(value, digits) {
+  return String(value).padStart(digits, '0');
+}
+
+function withFormattedInvoiceNumbers(client) {
+  if (!client) return null;
+  return {
+    ...client,
+    next_invoice_number_formatted: formatInvoiceNumber(client.next_invoice_number, client.invoice_digits),
+    last_invoice_number_formatted: formatInvoiceNumber(client.last_invoice_number, client.invoice_digits),
+  };
 }
 
 async function getMessagesOverview(env, url) {

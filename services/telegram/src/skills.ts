@@ -23,7 +23,7 @@ const skills: Skill[] = [
   {
     name: 'invoice-generator',
     status: 'active',
-    summary: 'Create PDF invoices from client, line item, rate, and payment details.',
+    summary: 'Create PDF invoices with D1-backed per-client numbering.',
   },
   {
     name: 'calendar-checkins',

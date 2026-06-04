@@ -12,6 +12,8 @@ python3 ~/.eidos/services/invoices/create_invoice.py \
 
 The script writes the PDF to `~/.eidos/data/outbox/invoices` by default and prints JSON containing `pdf_path`. When Eidos is running through Telegram, the gateway sends referenced local PDF paths back as Telegram documents.
 
+Invoice numbers are D1-backed per client when `EIDOS_WORKER_URL` and `EIDOS_API_TOKEN` are available. If no `--invoice-number` is passed, the script reserves the next number for that client, formatted as `001`, `002`, etc., then records the generated PDF in D1.
+
 Private defaults live outside Git:
 
 ```sh
@@ -28,7 +30,9 @@ Line item formats:
 Useful options:
 
 - `--client-address "Line 1" --client-address "Line 2"`
-- `--invoice-number "024"`
+- `--invoice-number "024"` for a manual override
+- `--set-next-number 4 --client "Desire Path Radio"` to seed or correct that client's next automatic number
+- `--invoice-digits 3` to control zero-padding
 - `--date "June 4, 2026"`
 - `--due "Net 14"`
 - `--payment-line "Venmo: ..."`
