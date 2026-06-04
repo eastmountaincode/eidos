@@ -1,8 +1,8 @@
 import type { SummaryWindow } from "@/types/messages";
 
 const summaryWindows: Array<{ label: string; value: SummaryWindow }> = [
-  { label: "Last 2 weeks", value: "two_weeks" },
   { label: "Last week", value: "week" },
+  { label: "Last 2 weeks", value: "two_weeks" },
   { label: "Last month", value: "month" },
   { label: "Last 100 messages", value: "last_100" },
 ];
@@ -26,6 +26,7 @@ export function SummaryControls({
       <select
         aria-label="Summary window"
         className="min-w-0 flex-1 rounded-md border border-border bg-white px-2 py-1.5 text-xs text-ink"
+        defaultValue="two_weeks"
         name="window"
       >
         {summaryWindows.map((window) => (
