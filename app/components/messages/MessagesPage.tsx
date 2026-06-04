@@ -182,7 +182,6 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
   }
 
   const run = data.latestRun;
-  const windowDays = run?.window_days ?? overviewWindow;
   const ingestStatus = data.latestIngestRequest?.status;
   const isIngesting = isRequestingIngest || ["queued", "running"].includes(ingestStatus || "");
   const ingestFailed = ingestStatus === "failed"
@@ -190,11 +189,8 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
 
   return (
     <div className="grid gap-3">
-      <header className="flex items-start justify-between gap-4">
+      <header>
         <h2 className="text-[26px] font-bold leading-tight">Messages</h2>
-        <span className="rounded-full bg-[#dff3e8] px-2.5 py-1 text-[11px] font-bold text-[#166534]">
-          {data.status === "active" ? "Connected" : "Not connected"}
-        </span>
       </header>
 
       <SummaryLine
@@ -207,16 +203,9 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
 
       <section className="grid items-start gap-3 xl:grid-cols-[minmax(620px,1fr)_minmax(320px,380px)]">
         <section className="rounded-lg border border-border bg-white p-3">
-          <div className="mb-2 flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold">People</h3>
-              <p className="text-sm text-muted">Last {windowDays} days.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <WindowToggle value={overviewWindow} onChange={setOverviewWindow} />
-              <ListLimitToggle value={listLimit} onChange={setListLimit} />
-              <span className="rounded-full bg-[#dff3e8] px-2 py-1 text-[11px] font-bold text-[#166534]">{data.status}</span>
-            </div>
+          <div className="mb-2 flex justify-end gap-2">
+            <WindowToggle value={overviewWindow} onChange={setOverviewWindow} />
+            <ListLimitToggle value={listLimit} onChange={setListLimit} />
           </div>
           <div className="overflow-x-auto">
             <div className="min-w-[560px]">
