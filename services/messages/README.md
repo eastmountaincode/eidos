@@ -22,6 +22,14 @@ Default output:
 - POST normalized message data to the Eidos Cloudflare Worker.
 - Worker writes current rolling-window message rows to D1.
 
+Deep/manual ingest options:
+
+```sh
+python3 ~/.eidos/services/messages/export_messages.py --days 0 --recent-limit 0 --conversation-limit 0
+```
+
+This intentionally pushes all available local Messages history into the D1 cache. The normal scheduled ingest should stay compact unless Andrew asks for a deeper cache.
+
 Optional debug outputs:
 
 - `--out /path/to/messages.json`
@@ -43,10 +51,12 @@ Agent retrieval:
 
 ```sh
 python3 ~/.eidos/services/messages/message_context.py --person "Lylia" --limit 25
+python3 ~/.eidos/services/messages/message_context.py --person "Lylia" --all
+python3 ~/.eidos/services/messages/message_context.py --person "Lylia" --since 2025-01-01 --until 2025-03-01 --order asc
 python3 ~/.eidos/services/messages/message_context.py --list
 ```
 
-This reads from D1 and returns compact conversation analytics, the latest completed summary, and recent cached messages. Use higher limits intentionally when Andrew explicitly asks to pull more of a conversation into context.
+This reads from D1 and returns compact conversation analytics, the latest completed summary, and cached messages. The default is 25 recent messages; use `--limit N`, `--all`, `--since`, `--until`, `--offset`, and `--order` intentionally when Andrew explicitly asks to pull more or older context into the agent.
 
 Known hard parts:
 

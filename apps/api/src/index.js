@@ -147,7 +147,9 @@ async function getMessagesOverview(env) {
 }
 
 async function getMessageConversations(env, url) {
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 100);
+  const limit = parseLimit(url.searchParams.get('limit'), 100);
+  const limitClause = limit === null ? '' : 'LIMIT ?';
+  const bindings = limit === null ? [] : [limit];
   const conversations = await env.DB.prepare(`
     SELECT
       conversation_key,
@@ -161,8 +163,8 @@ async function getMessageConversations(env, url) {
     FROM message_conversations
     WHERE message_count > 0
     ORDER BY message_count DESC, last_active DESC
-    LIMIT ?
-  `).bind(limit).all();
+    ${limitClause}
+  `).bind(...bindings).all();
 
   return json({ conversations: conversations.results });
 }
@@ -172,7 +174,11 @@ async function getConversationDetail(env, url) {
   if (!conversationKey) {
     return json({ error: 'missing conversation_key' }, 400);
   }
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 20), 1), 200);
+  const limit = parseLimit(url.searchParams.get('limit'), 20);
+  const offset = Math.max(Number(url.searchParams.get('offset') || 0), 0);
+  const since = url.searchParams.get('since') || '';
+  const until = url.searchParams.get('until') || '';
+  const order = url.searchParams.get('order') === 'asc' ? 'ASC' : 'DESC';
 
   const conversation = await env.DB.prepare(`
     SELECT
@@ -192,13 +198,29 @@ async function getConversationDetail(env, url) {
     return json({ error: 'conversation not found' }, 404);
   }
 
+  const messageFilters = ['conversation_key = ?'];
+  const messageBindings = [conversationKey];
+  if (since) {
+    messageFilters.push('timestamp >= ?');
+    messageBindings.push(since);
+  }
+  if (until) {
+    messageFilters.push('timestamp <= ?');
+    messageBindings.push(until);
+  }
+  const limitClause = limit === null ? (offset > 0 ? 'LIMIT -1' : '') : 'LIMIT ?';
+  const offsetClause = offset > 0 ? 'OFFSET ?' : '';
+  if (limit !== null) messageBindings.push(limit);
+  if (offset > 0) messageBindings.push(offset);
+
   const recent = await env.DB.prepare(`
     SELECT timestamp, direction, chat_type, body
     FROM message_items
-    WHERE conversation_key = ?
-    ORDER BY timestamp DESC
-    LIMIT ?
-  `).bind(conversationKey, limit).all();
+    WHERE ${messageFilters.join(' AND ')}
+    ORDER BY timestamp ${order}
+    ${limitClause}
+    ${offsetClause}
+  `).bind(...messageBindings).all();
 
   const summaries = await env.DB.prepare(`
     SELECT
@@ -232,6 +254,13 @@ async function getConversationDetail(env, url) {
     recentMessages: recent.results,
     summaries: summaries.results.map(normalizeSummary),
   });
+}
+
+function parseLimit(value, defaultValue) {
+  if (value === 'all' || value === '0') return null;
+  const parsed = Number(value || defaultValue);
+  if (!Number.isFinite(parsed)) return defaultValue;
+  return Math.max(Math.floor(parsed), 1);
 }
 
 async function requestSummary(env, payload) {

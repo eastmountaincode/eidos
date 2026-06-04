@@ -104,7 +104,7 @@ INSERT INTO agent_capabilities (
     'Fetches D1-backed iMessage/SMS context for a person when the agent needs message evidence.',
     'python3 ~/.eidos/services/messages/message_context.py --person "NAME" --limit 25',
     'Cloudflare D1: message_conversations, message_items, conversation_summaries',
-    'Use intentionally when Andrew asks to pull texts/messages, is processing an interaction, or recent message evidence would prevent guessing.',
+    'Default is compact. Use --limit N, --all, --since, --until, --offset, and --order when Andrew asks for more or older cached message context.',
     10,
     datetime('now')
   ),

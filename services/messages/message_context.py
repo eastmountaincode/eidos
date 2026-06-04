@@ -17,7 +17,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-url", default=os.environ.get("EIDOS_WORKER_URL", ""))
     parser.add_argument("--api-token", default=os.environ.get("EIDOS_API_TOKEN", ""))
     parser.add_argument("--person", default="", help="Name, phone number, or handle to look up.")
-    parser.add_argument("--limit", type=int, default=25, help="Recent messages to include, max 100.")
+    parser.add_argument("--limit", type=int, default=25, help="Recent cached messages to include. Use --all for every cached message.")
+    parser.add_argument("--all", action="store_true", help="Include every cached message in D1 for the matched conversation.")
+    parser.add_argument("--since", default="", help="Only include cached messages at or after this ISO timestamp/date.")
+    parser.add_argument("--until", default="", help="Only include cached messages at or before this ISO timestamp/date.")
+    parser.add_argument("--offset", type=int, default=0, help="Skip this many matched messages for pagination.")
+    parser.add_argument("--order", choices=("asc", "desc"), default="desc", help="Message order from D1.")
+    parser.add_argument("--list-limit", default="all", help="Known conversations to scan/list. Use a number or 'all'.")
     parser.add_argument("--list", action="store_true", help="List known conversations instead of fetching one.")
     return parser.parse_args()
 
@@ -68,8 +74,8 @@ def conversation_score(query: str, conversation: dict[str, Any]) -> int:
     return score
 
 
-def find_conversation(api_url: str, token: str, person: str) -> dict[str, Any]:
-    data = request_json(api_url, token, "/api/messages/conversations?limit=100")
+def find_conversation(api_url: str, token: str, person: str, list_limit: str) -> dict[str, Any]:
+    data = request_json(api_url, token, f"/api/messages/conversations?{urllib.parse.urlencode({'limit': list_limit})}")
     conversations = data.get("conversations", [])
     ranked = [
         (conversation_score(person, conversation), conversation)
@@ -82,8 +88,8 @@ def find_conversation(api_url: str, token: str, person: str) -> dict[str, Any]:
     return ranked[0][1]
 
 
-def print_conversation_list(api_url: str, token: str) -> None:
-    data = request_json(api_url, token, "/api/messages/conversations?limit=100")
+def print_conversation_list(api_url: str, token: str, list_limit: str) -> None:
+    data = request_json(api_url, token, f"/api/messages/conversations?{urllib.parse.urlencode({'limit': list_limit})}")
     for conversation in data.get("conversations", []):
         name = conversation.get("display_name") or "Unknown"
         key = conversation.get("conversation_key") or ""
@@ -94,12 +100,30 @@ def print_conversation_list(api_url: str, token: str) -> None:
         print(f"- {name} ({key}): {total} messages, me {sent}, them {received}, last active {last_active}")
 
 
-def print_message_context(api_url: str, token: str, person: str, limit: int) -> None:
-    conversation = find_conversation(api_url, token, person)
-    query = urllib.parse.urlencode({
+def print_message_context(
+    api_url: str,
+    token: str,
+    person: str,
+    limit: int,
+    include_all: bool,
+    since: str,
+    until: str,
+    offset: int,
+    order: str,
+    list_limit: str,
+) -> None:
+    conversation = find_conversation(api_url, token, person, list_limit)
+    query_params = {
         "conversation_key": conversation["conversation_key"],
-        "limit": min(max(limit, 1), 100),
-    })
+        "limit": "all" if include_all else max(limit, 1),
+        "offset": max(offset, 0),
+        "order": order,
+    }
+    if since:
+        query_params["since"] = since
+    if until:
+        query_params["until"] = until
+    query = urllib.parse.urlencode(query_params)
     detail = request_json(api_url, token, f"/api/messages/conversation?{query}")
     summaries = [
         summary for summary in detail.get("summaries", [])
@@ -130,8 +154,18 @@ def print_message_context(api_url: str, token: str, person: str, limit: int) -> 
         if latest_summary.get("relationship_notes"):
             print(f"Relationship notes: {compact(latest_summary.get('relationship_notes'))}")
 
-    print(f"\n## Recent Messages ({len(recent)})")
-    for item in reversed(recent):
+    label = "Cached Messages" if include_all else "Recent Messages"
+    filters = []
+    if since:
+        filters.append(f"since {since}")
+    if until:
+        filters.append(f"until {until}")
+    if offset:
+        filters.append(f"offset {offset}")
+    filter_label = f" ({', '.join(filters)})" if filters else ""
+    print(f"\n## {label} ({len(recent)}){filter_label}")
+    items = recent if order == "asc" else reversed(recent)
+    for item in items:
         direction = "me" if item.get("direction") == "sent" else "them"
         timestamp = item.get("timestamp") or "unknown time"
         body = compact(item.get("body") or "")
@@ -143,11 +177,22 @@ def main() -> None:
     if not args.api_url or not args.api_token:
         raise SystemExit("EIDOS_WORKER_URL and EIDOS_API_TOKEN are required")
     if args.list:
-        print_conversation_list(args.api_url, args.api_token)
+        print_conversation_list(args.api_url, args.api_token, args.list_limit)
         return
     if not args.person:
         raise SystemExit("--person is required unless --list is used")
-    print_message_context(args.api_url, args.api_token, args.person, args.limit)
+    print_message_context(
+        args.api_url,
+        args.api_token,
+        args.person,
+        args.limit,
+        args.all,
+        args.since,
+        args.until,
+        args.offset,
+        args.order,
+        args.list_limit,
+    )
 
 
 if __name__ == "__main__":

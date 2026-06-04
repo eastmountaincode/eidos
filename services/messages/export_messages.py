@@ -38,13 +38,16 @@ def build_parser(home: Path, eidos_home: Path) -> argparse.ArgumentParser:
     parser.add_argument("--overrides", default=str(eidos_home / "data/messages/contact-overrides.txt"))
     parser.add_argument("--api-url", default=os.environ.get("EIDOS_WORKER_URL", ""))
     parser.add_argument("--api-token", default=os.environ.get("EIDOS_API_TOKEN", ""))
-    parser.add_argument("--days", type=int, default=30)
-    parser.add_argument("--recent-limit", type=int, default=100, help="Recent message previews to keep per conversation")
+    parser.add_argument("--days", type=int, default=30, help="Days to ingest. Use 0 for all available history.")
+    parser.add_argument("--recent-limit", type=int, default=100, help="Recent message previews to keep per conversation. Use 0 for all messages in the selected window.")
+    parser.add_argument("--conversation-limit", type=int, default=0, help="Conversation analytics to keep. Use 0 for all conversations.")
     parser.add_argument("--preview-len", type=int, default=240)
     return parser
 
 
-def apple_cutoff_ns(days: int) -> int:
+def apple_cutoff_ns(days: int) -> int | None:
+    if days <= 0:
+        return None
     unix_now = int(datetime.now(tz=timezone.utc).timestamp())
     return (unix_now - APPLE_EPOCH_OFFSET - days * 86_400) * 1_000_000_000
 
@@ -187,10 +190,16 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
 
     contacts = load_contacts(Path.home(), load_overrides(overrides_path))
     cutoff = apple_cutoff_ns(args.days)
+    date_filter = "AND m.date > ?" if cutoff is not None else ""
+    date_params = (cutoff,) if cutoff is not None else ()
+    recent_rank_filter = "WHERE conversation_rank <= ?" if args.recent_limit > 0 else ""
+    recent_rank_params = (args.recent_limit,) if args.recent_limit > 0 else ()
+    stat_limit_clause = "LIMIT ?" if args.conversation_limit > 0 else ""
+    stat_limit_params = (args.conversation_limit,) if args.conversation_limit > 0 else ()
     conn = connect_readonly(chat_db)
     conn.row_factory = sqlite3.Row
 
-    recent_rows = conn.execute("""
+    recent_rows = conn.execute(f"""
         SELECT *
         FROM (
             SELECT
@@ -213,13 +222,13 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
             LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
             LEFT JOIN chat c ON cmj.chat_id = c.ROWID
             WHERE (m.text IS NOT NULL AND m.text != '' OR m.attributedBody IS NOT NULL)
-              AND m.date > ?
+              {date_filter}
         )
-        WHERE conversation_rank <= ?
+        {recent_rank_filter}
         ORDER BY date DESC
-    """, (cutoff, args.recent_limit)).fetchall()
+    """, (*date_params, *recent_rank_params)).fetchall()
 
-    stat_rows = conn.execute("""
+    stat_rows = conn.execute(f"""
         SELECT
             CASE WHEN c.style = 43 THEN COALESCE(c.chat_identifier, c.display_name, 'Unknown') ELSE COALESCE(h.id, c.chat_identifier, 'Unknown') END AS handle,
             COALESCE(c.display_name, '') AS group_name,
@@ -234,14 +243,14 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
         LEFT JOIN chat_message_join cmj ON m.ROWID = cmj.message_id
         LEFT JOIN chat c ON cmj.chat_id = c.ROWID
         WHERE (m.text IS NOT NULL AND m.text != '' OR m.attributedBody IS NOT NULL)
-          AND m.date > ?
+          {date_filter}
         GROUP BY CASE WHEN c.style = 43 THEN COALESCE(c.chat_identifier, c.display_name, 'Unknown') ELSE COALESCE(h.id, c.chat_identifier, 'Unknown') END,
                  COALESCE(c.display_name, '')
         ORDER BY message_count DESC
-        LIMIT 50
-    """, (cutoff,)).fetchall()
+        {stat_limit_clause}
+    """, (*date_params, *stat_limit_params)).fetchall()
 
-    total = conn.execute("""
+    total = conn.execute(f"""
         SELECT
             COUNT(*) AS total,
             SUM(CASE WHEN is_from_me = 1 THEN 1 ELSE 0 END) AS sent,
@@ -249,8 +258,8 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
             MAX(date) AS last_date
         FROM message
         WHERE (text IS NOT NULL AND text != '' OR attributedBody IS NOT NULL)
-          AND date > ?
-    """, (cutoff,)).fetchone()
+          {"AND date > ?" if cutoff is not None else ""}
+    """, date_params).fetchone()
     conn.close()
 
     service_counts: Counter[str] = Counter()
