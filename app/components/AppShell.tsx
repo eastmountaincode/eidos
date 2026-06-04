@@ -17,7 +17,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-bg text-ink md:grid md:grid-cols-[236px_minmax(0,1fr)]">
       <aside className="sticky top-0 z-10 bg-sidebar px-3.5 py-4 text-white md:min-h-screen">
         <div className="border-b border-white/10 px-1.5 pb-4">
-          <h1 className="text-lg font-bold leading-none">Eidos</h1>
+          <h1
+            className="text-lg font-bold leading-none"
+            style={{ fontFamily: "\"Vaxen Rounded\", \"VaxenRounded\", ui-sans-serif, system-ui, sans-serif" }}
+          >
+            Eidos
+          </h1>
         </div>
         <nav className="mt-5 flex gap-1 overflow-x-auto md:grid">
           {navItems.map((item) => {
