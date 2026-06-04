@@ -109,6 +109,19 @@ INSERT INTO agent_capabilities (
     datetime('now')
   ),
   (
+    'invoice-generator',
+    'tool',
+    'Invoice generator',
+    'active',
+    'Creation',
+    'Creates PDF invoices from structured client and line-item details.',
+    'python3 ~/.eidos/services/invoices/create_invoice.py --client "CLIENT" --item "Description|hours|rate"',
+    'Local PDF outbox: ~/.eidos/data/outbox/invoices',
+    'Agent-facing tool. Ask for missing invoice details, run the command, then include the returned pdf_path so Telegram can send the document.',
+    20,
+    datetime('now')
+  ),
+  (
     'telegram-chat',
     'skill',
     'Telegram chat',

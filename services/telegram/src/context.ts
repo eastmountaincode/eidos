@@ -41,6 +41,7 @@ export function buildPrompt(userText: string, profile: ProfileName): string {
     '- Message context defaults to 25 recent cached messages, but you can request more with `--limit N`, all cached D1 messages with `--all`, older ranges with `--since` / `--until`, pages with `--offset`, and chronological output with `--order asc`.',
     '- Use the message context tool intentionally, not for every name mention. It is appropriate when Andrew asks you to pull texts/messages, asks about a specific person, appears conflicted about an interaction, or when recent message evidence would prevent guessing.',
     '- The tool reads from Eidos D1, including message analytics, recent cached messages, and completed conversation summaries. It does not mutate Messages.',
+    '- Invoice generator: use `python3 ~/.eidos/services/invoices/create_invoice.py --client "CLIENT" --item "Description|hours|rate"` to create PDF invoices. Ask for missing client, line item, rate, invoice number, due terms, or address details only when needed. The command prints JSON with `pdf_path`; include that local PDF path in your response so Telegram can send the document.',
     '',
     '## User Message',
     userText,

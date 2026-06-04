@@ -1,0 +1,8 @@
+{
+  "from_name": "Andrew Boylan",
+  "from_address": [],
+  "payment_lines": [
+    "Payment method goes here"
+  ],
+  "output_dir": "~/.eidos/data/outbox/invoices"
+}

@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
-import { Bot, type Context } from 'grammy';
+import { Bot, InputFile, type Context } from 'grammy';
 import { sequentialize } from '@grammyjs/runner';
 import { config, profiles, type ProfileName } from './config.js';
 import { codexStatus, sendMessage } from './codex.js';
@@ -140,6 +140,7 @@ bot.on('message:text', async (ctx) => {
       : response.text || '(no response)';
 
     await sendFinalText(chatId, sentMessage, finalText);
+    await sendReferencedDocuments(chatId, finalText);
   } finally {
     activeChats.delete(chatKey);
   }
@@ -224,6 +225,16 @@ async function sendFinalText(chatId: number, sentMessage: { message_id: number }
 async function sendChunked(chatId: number, text: string): Promise<void> {
   for (const chunk of splitMessage(text, config.telegram.maxMessageLength)) {
     await bot.api.sendMessage(chatId, chunk);
+  }
+}
+
+async function sendReferencedDocuments(chatId: number, text: string): Promise<void> {
+  const paths = Array.from(new Set(text.match(/\/[^\s"'`]+\.pdf/g) ?? []));
+  for (const path of paths) {
+    if (!existsSync(path)) continue;
+    await bot.api.sendDocument(chatId, new InputFile(path), {
+      caption: path.split('/').pop() || 'PDF',
+    }).catch(() => {});
   }
 }
 

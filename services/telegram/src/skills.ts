@@ -21,6 +21,11 @@ const skills: Skill[] = [
     summary: 'Read D1-backed iMessage/SMS context, summaries, and analytics when useful.',
   },
   {
+    name: 'invoice-generator',
+    status: 'active',
+    summary: 'Create PDF invoices from client, line item, rate, and payment details.',
+  },
+  {
     name: 'calendar-checkins',
     status: 'planned',
     summary: 'Morning and evening check-ins grounded in calendar and message context.',

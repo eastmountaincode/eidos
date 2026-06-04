@@ -6,6 +6,7 @@ First skills to model:
 
 - meeting/audio transcription from a file
 - image to Apple Music playlist
+- invoice generation
 - iMessage/SMS ingest
 - calendar check-in
 - portal status
@@ -24,6 +25,7 @@ Initial Telegram inventory:
 - `telegram-chat`: active
 - `file-intake`: active
 - `messages-ingest`: active
+- `invoice-generator`: active
 - `calendar-checkins`: planned
 - `meeting-transcription`: planned
 - `playlist-from-image`: planned
