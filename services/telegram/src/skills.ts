@@ -1,6 +1,6 @@
 type Skill = {
   name: string;
-  status: 'planned' | 'stub' | 'active';
+  status: 'planned' | 'stub' | 'active' | 'needs_permission';
   summary: string;
 };
 
@@ -29,6 +29,11 @@ const skills: Skill[] = [
     name: 'capability-registry',
     status: 'active',
     summary: 'Update tool and skill metadata timestamps for the portal registry.',
+  },
+  {
+    name: 'calendar-events',
+    status: 'needs_permission',
+    summary: 'Add structured event details to Apple Calendar, defaulting to Events Ambient.',
   },
   {
     name: 'calendar-checkins',
