@@ -16,6 +16,11 @@ body {
   color: var(--color-ink);
 }
 
+html,
+body {
+  overscroll-behavior: none;
+}
+
 button:not(:disabled),
 select:not(:disabled),
 a[href],

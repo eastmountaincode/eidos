@@ -14,8 +14,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-bg text-ink md:grid md:grid-cols-[236px_minmax(0,1fr)]">
-      <aside className="sticky top-0 z-10 bg-sidebar px-3.5 py-4 text-white md:min-h-screen">
+    <div className="min-h-screen bg-bg text-ink md:grid md:h-screen md:grid-cols-[236px_minmax(0,1fr)] md:overflow-hidden">
+      <aside className="sticky top-0 z-10 bg-sidebar px-3.5 py-4 text-white md:h-screen md:overflow-y-auto">
         <div className="border-b border-white/10 px-2.5 pb-4 pt-1">
           <h1
             className="block w-full whitespace-nowrap text-[40px] font-bold leading-[1.05]"
@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
       </aside>
-      <main className="min-w-0 p-4 md:p-6">{children}</main>
+      <main className="min-w-0 p-4 md:h-screen md:overflow-y-auto md:p-6">{children}</main>
     </div>
   );
 }
