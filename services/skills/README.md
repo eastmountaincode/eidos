@@ -20,6 +20,14 @@ Each skill should have:
 - last tested timestamp
 - status: ready, needs_test, broken, planned
 
+After changing a tool or skill implementation, prompt instructions, private config, or tested status, update its D1 registry row so the portal `Updated` timestamp remains meaningful:
+
+```sh
+python3 ~/.eidos/services/skills/update_capability.py --id "invoice-generator"
+```
+
+Pass `--notes`, `--summary`, `--status`, or other metadata fields when the visible registry text should change too.
+
 Initial Telegram inventory:
 
 - `telegram-chat`: active

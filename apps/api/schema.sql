@@ -147,6 +147,19 @@ INSERT INTO agent_capabilities (
     datetime('now')
   ),
   (
+    'capability-registry',
+    'tool',
+    'Capability registry',
+    'active',
+    'Admin',
+    'Updates Tools & Skills registry metadata and timestamps after tool or skill changes.',
+    'python3 ~/.eidos/services/skills/update_capability.py --id "CAPABILITY_ID"',
+    'Cloudflare D1: agent_capabilities',
+    'Run this after changing a tool or skill implementation, prompt instructions, private config, or tested status so the portal Updated field stays trustworthy.',
+    30,
+    datetime('now')
+  ),
+  (
     'telegram-chat',
     'skill',
     'Telegram chat',

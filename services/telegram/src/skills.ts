@@ -26,6 +26,11 @@ const skills: Skill[] = [
     summary: 'Create PDF invoices with D1-backed per-client numbering.',
   },
   {
+    name: 'capability-registry',
+    status: 'active',
+    summary: 'Update tool and skill metadata timestamps for the portal registry.',
+  },
+  {
     name: 'calendar-checkins',
     status: 'planned',
     summary: 'Morning and evening check-ins grounded in calendar and message context.',

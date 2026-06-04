@@ -42,6 +42,12 @@ export default {
       return getCapabilities(env);
     }
 
+    const capabilityMatch = url.pathname.match(/^\/api\/capabilities\/([^/]+)$/);
+    if (request.method === 'POST' && capabilityMatch) {
+      const payload = await request.json();
+      return updateCapability(env, decodeURIComponent(capabilityMatch[1]), payload);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/invoices/clients') {
       return getInvoiceClients(env);
     }
@@ -126,6 +132,85 @@ async function getCapabilities(env) {
   `).all();
 
   return json({ capabilities: capabilities.results });
+}
+
+async function updateCapability(env, id, payload) {
+  const existing = await env.DB.prepare(`
+    SELECT *
+    FROM agent_capabilities
+    WHERE id = ?
+  `).bind(id).first();
+
+  if (!existing) {
+    return json({ error: 'capability not found' }, 404);
+  }
+
+  const allowedStatuses = new Set(['active', 'planned', 'stub', 'broken', 'needs_test']);
+  const status = payload.status === undefined ? existing.status : String(payload.status || '').trim();
+  if (!status || (!allowedStatuses.has(status) && status.length > 40)) {
+    return json({ error: 'invalid status' }, 400);
+  }
+
+  const sortOrder = payload.sort_order === undefined || payload.sort_order === null
+    ? existing.sort_order
+    : Number(payload.sort_order);
+  const name = payload.name === undefined ? existing.name : cleanRequiredCapabilityString(payload.name);
+  const summary = payload.summary === undefined ? existing.summary : cleanRequiredCapabilityString(payload.summary);
+  if (!name) return json({ error: 'name cannot be empty' }, 400);
+  if (!summary) return json({ error: 'summary cannot be empty' }, 400);
+
+  await env.DB.prepare(`
+    UPDATE agent_capabilities
+    SET
+      name = ?,
+      status = ?,
+      category = ?,
+      summary = ?,
+      invocation = ?,
+      data_source = ?,
+      notes = ?,
+      sort_order = ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    name,
+    status,
+    payload.category === undefined ? existing.category : cleanOptionalString(payload.category),
+    summary,
+    payload.invocation === undefined ? existing.invocation : cleanOptionalString(payload.invocation),
+    payload.data_source === undefined ? existing.data_source : cleanOptionalString(payload.data_source),
+    payload.notes === undefined ? existing.notes : cleanOptionalString(payload.notes),
+    Number.isFinite(sortOrder) ? Math.floor(sortOrder) : existing.sort_order,
+    id,
+  ).run();
+
+  const capability = await env.DB.prepare(`
+    SELECT
+      id,
+      kind,
+      name,
+      status,
+      category,
+      summary,
+      invocation,
+      data_source,
+      notes,
+      sort_order,
+      updated_at
+    FROM agent_capabilities
+    WHERE id = ?
+  `).bind(id).first();
+
+  return json({ capability });
+}
+
+function cleanOptionalString(value) {
+  const cleaned = String(value ?? '').trim();
+  return cleaned || null;
+}
+
+function cleanRequiredCapabilityString(value) {
+  return String(value ?? '').trim();
 }
 
 async function getInvoiceClients(env) {
