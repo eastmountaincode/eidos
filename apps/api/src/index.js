@@ -128,7 +128,6 @@ async function getMessagesOverview(env) {
     FROM message_conversations
     WHERE message_count > 0
     ORDER BY message_count DESC, last_active DESC
-    LIMIT 20
   `).all();
 
   const latestIngestRequest = await env.DB.prepare(`
