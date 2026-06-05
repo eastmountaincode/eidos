@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Vaxen Rounded";
+  src: url("/fonts/VaxenRoundedVF.ttf") format("truetype");
+  font-display: swap;
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: "VaxenRounded";
+  src: url("/fonts/VaxenRoundedVF.ttf") format("truetype");
+  font-display: swap;
+  font-weight: 100 900;
+}
+
 @theme {
   --color-bg: #f5f7f7;
   --color-ink: #1f2525;
