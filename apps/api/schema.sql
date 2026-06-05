@@ -137,6 +137,13 @@ CREATE TABLE IF NOT EXISTS checkin_runs (
 CREATE INDEX IF NOT EXISTS idx_checkin_runs_kind_started ON checkin_runs(kind, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_checkin_runs_status_started ON checkin_runs(status, started_at DESC);
 
+CREATE TABLE IF NOT EXISTS mantra_state (
+  id TEXT PRIMARY KEY CHECK (id = 'current'),
+  body TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
 INSERT INTO agent_capabilities (
   id, kind, name, status, category, summary, invocation, data_source, notes, sort_order, updated_at
 ) VALUES
@@ -177,6 +184,19 @@ INSERT INTO agent_capabilities (
     'Cloudflare D1: agent_capabilities',
     'Run this after changing a tool or skill implementation, prompt instructions, private config, or tested status so the portal Updated field stays trustworthy.',
     30,
+    datetime('now')
+  ),
+  (
+    'mantra-context',
+    'tool',
+    'Mantra context',
+    'active',
+    'Reflection',
+    'Stores Andrew''s current focus/mantra for morning check-ins and agent context.',
+    'Portal Mantra page updates Cloudflare D1; check-ins read /api/mantra.',
+    'Cloudflare D1: mantra_state',
+    'Use as a lightweight current intention, especially in morning check-ins. Do not overstate it or turn it into generic affirmation filler.',
+    35,
     datetime('now')
   ),
   (

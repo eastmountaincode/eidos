@@ -225,6 +225,13 @@ def read_message_context(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def read_mantra_context(args: argparse.Namespace) -> dict[str, Any]:
+    try:
+        return request_json(args.api_url, args.api_token, "/api/mantra").get("mantra") or {}
+    except Exception as exc:
+        return {"error": str(exc), "body": ""}
+
+
 def summarize_existing_summary(summary: dict[str, Any]) -> dict[str, Any]:
     return {
         "generated_at": summary.get("generated_at"),
@@ -266,8 +273,9 @@ Use the available calendar, recent message, previous check-in, and agent-note co
 
 Rules:
 - This is not a heartbeat. Only mention things that are useful to surface.
-- Morning: focus on today's schedule, possibly tomorrow, upcoming deadlines, plans made in messages, and open loops.
+- Morning: focus on today's schedule, possibly tomorrow, upcoming deadlines, plans made in messages, open loops, and Andrew's current mantra if present.
 - Evening: focus on tomorrow, meaningful plans or changes from today, and unresolved loops worth checking back on.
+- Treat the mantra as current intention/focus, not as a generic affirmation. Fold it in lightly when useful.
 - Skip trivial transactional texts unless they affect plans.
 - Do not mention that a data source is unavailable unless it materially limits the check-in.
 - Be concise: usually 3 to 6 bullets or short paragraphs.
@@ -359,6 +367,7 @@ def main() -> None:
             "kind": kind,
             "generated_at": local_iso(datetime.now().astimezone()),
             "calendar_window": {"start": local_iso(start), "end": local_iso(end)},
+            "mantra": read_mantra_context(args),
             "calendar": calendar_context,
             "messages": message_context,
             "previous_checkins": [

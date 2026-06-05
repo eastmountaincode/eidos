@@ -1,12 +1,13 @@
 "use client";
 
-import { MessageSquareText, Wrench } from "lucide-react";
+import { MessageSquareText, Sparkles, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 const navItems = [
   { href: "/", label: "Messages", Icon: MessageSquareText },
+  { href: "/mantra", label: "Mantra", Icon: Sparkles },
   { href: "/tools", label: "Tools & Skills", Icon: Wrench },
 ];
 

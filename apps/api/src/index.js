@@ -42,6 +42,15 @@ export default {
       return getCapabilities(env);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/mantra') {
+      return getMantra(env);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/mantra') {
+      const payload = await request.json();
+      return updateMantra(env, payload);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/checkins/runs') {
       return getCheckinRuns(env, url);
     }
@@ -141,6 +150,36 @@ async function getCapabilities(env) {
   `).all();
 
   return json({ capabilities: capabilities.results });
+}
+
+async function getMantra(env) {
+  const mantra = await env.DB.prepare(`
+    SELECT id, body, created_at, updated_at
+    FROM mantra_state
+    WHERE id = 'current'
+  `).first();
+
+  return json({
+    mantra: mantra || {
+      id: 'current',
+      body: '',
+      created_at: null,
+      updated_at: null,
+    },
+  });
+}
+
+async function updateMantra(env, payload) {
+  const body = String(payload.body ?? '').trim().slice(0, 4000);
+  await env.DB.prepare(`
+    INSERT INTO mantra_state (id, body, created_at, updated_at)
+    VALUES ('current', ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      body = excluded.body,
+      updated_at = datetime('now')
+  `).bind(body).run();
+
+  return getMantra(env);
 }
 
 async function getCheckinRuns(env, url) {

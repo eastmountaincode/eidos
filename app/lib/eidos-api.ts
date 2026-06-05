@@ -1,4 +1,5 @@
 import type { CapabilitiesResponse } from "@/types/capabilities";
+import type { MantraResponse } from "@/types/mantra";
 import type { ConversationDetail, MessageIngestRequest, MessagesOverview, SummaryWindow } from "@/types/messages";
 
 function workerBaseUrl() {
@@ -38,6 +39,17 @@ export function getMessagesOverview(windowDays = 30) {
 
 export function getCapabilities() {
   return workerFetch<CapabilitiesResponse>("/api/capabilities");
+}
+
+export function getMantra() {
+  return workerFetch<MantraResponse>("/api/mantra");
+}
+
+export function updateMantra(body: string) {
+  return workerFetch<MantraResponse>("/api/mantra", {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
 }
 
 export function requestMessagesIngest() {

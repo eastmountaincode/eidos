@@ -41,6 +41,11 @@ const skills: Skill[] = [
     summary: 'Send morning and evening Telegram check-ins grounded in calendar, messages, and recent agent context.',
   },
   {
+    name: 'mantra-context',
+    status: 'active',
+    summary: 'Read the current portal Mantra as a lightweight focus/intention for check-ins and reflection.',
+  },
+  {
     name: 'playlist-from-image',
     status: 'planned',
     summary: 'Turn an image or vibe board into an Apple Music playlist.',
