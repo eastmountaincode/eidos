@@ -8,10 +8,10 @@
     <string>Eidos message summary processor</string>
     <key>RunAtLoad</key>
     <true/>
+    <key>KeepAlive</key>
+    <true/>
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
-    <key>StartInterval</key>
-    <integer>300</integer>
     <key>WorkingDirectory</key>
     <string>/Users/oasis/.eidos/services/messages</string>
     <key>ProgramArguments</key>
@@ -25,8 +25,12 @@
       <string>StrictHostKeyChecking=accept-new</string>
       <string>-o</string>
       <string>ConnectTimeout=8</string>
+      <string>-o</string>
+      <string>ServerAliveInterval=60</string>
+      <string>-o</string>
+      <string>ServerAliveCountMax=2</string>
       <string>oasis@127.0.0.1</string>
-      <string>cd "$HOME/.eidos/services/messages" &amp;&amp; set -a; . "$HOME/.eidos/.env"; set +a; exec /usr/bin/python3 "$HOME/.eidos/services/messages/process_summary_jobs.py" --limit 2</string>
+      <string>cd "$HOME/.eidos/services/messages" &amp;&amp; set -a; . "$HOME/.eidos/.env"; set +a; exec /usr/bin/python3 "$HOME/.eidos/services/messages/process_summary_jobs.py" --daemon --poll-interval 15 --limit 2</string>
     </array>
     <key>StandardOutPath</key>
     <string>/Users/oasis/.eidos/logs/message-summaries.log</string>

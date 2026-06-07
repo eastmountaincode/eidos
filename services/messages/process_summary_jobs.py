@@ -13,9 +13,12 @@ import json
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import subprocess
+import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -48,6 +51,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-token", default=os.environ.get("EIDOS_API_TOKEN", ""))
     parser.add_argument("--limit", type=int, default=1)
     parser.add_argument("--preview", action="store_true", help="Print queued jobs without processing.")
+    parser.add_argument("--daemon", action="store_true", help="Keep running and poll for queued jobs.")
+    parser.add_argument("--poll-interval", type=int, default=15, help="Seconds between polls in daemon mode.")
     parser.add_argument("--codex-bin", default=default_codex_bin())
     parser.add_argument("--codex-model", default=os.environ.get("EIDOS_SUMMARY_MODEL", "gpt-5.4-mini"))
     parser.add_argument("--workdir", default=str(eidos_home))
@@ -369,30 +374,83 @@ def update_ingest_request(args: argparse.Namespace, request_id: str, payload: di
     return request_json(args.api_url, args.api_token, f"/api/messages/ingest-requests/{urllib.parse.quote(request_id)}", payload)
 
 
+def process_queued_jobs(args: argparse.Namespace) -> dict[str, Any]:
+    ingest_data = request_json(args.api_url, args.api_token, "/api/messages/ingest-requests?status=queued&limit=1")
+    ingest_requests = ingest_data.get("requests", [])
+    summary_data = request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs?status=queued&limit={args.limit}")
+    summary_jobs = summary_data.get("jobs", [])
+
+    ingest_results = [process_ingest_request(args, request) for request in ingest_requests]
+    summary_results = [process_job(args, job) for job in summary_jobs]
+    return {
+        "ingests_processed": len(ingest_results),
+        "summaries_processed": len(summary_results),
+        "ingest_results": ingest_results,
+        "summary_results": summary_results,
+    }
+
+
+def run_daemon(args: argparse.Namespace) -> None:
+    stopped = False
+
+    def stop(_signum: int, _frame: Any) -> None:
+        nonlocal stopped
+        stopped = True
+
+    signal.signal(signal.SIGINT, stop)
+    signal.signal(signal.SIGTERM, stop)
+    print(json.dumps({
+        "event": "message_worker_started",
+        "poll_interval": args.poll_interval,
+        "limit": args.limit,
+        "started_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+    }), flush=True)
+
+    while not stopped:
+        started = time.monotonic()
+        try:
+            result = process_queued_jobs(args)
+            if result["ingests_processed"] or result["summaries_processed"]:
+                print(json.dumps({
+                    "event": "jobs_processed",
+                    "processed_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+                    **result,
+                }, indent=2), flush=True)
+        except Exception as exc:
+            print(json.dumps({
+                "event": "message_worker_error",
+                "error": str(exc),
+                "occurred_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+            }), file=sys.stderr, flush=True)
+
+        delay = max(args.poll_interval - (time.monotonic() - started), 1)
+        time.sleep(delay)
+
+    print(json.dumps({
+        "event": "message_worker_stopped",
+        "stopped_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+    }), flush=True)
+
+
 def main() -> None:
     args = parse_args()
     if not args.api_url or not args.api_token:
         raise SystemExit("EIDOS_WORKER_URL and EIDOS_API_TOKEN are required")
 
-    ingest_data = request_json(args.api_url, args.api_token, "/api/messages/ingest-requests?status=queued&limit=1")
-    ingest_requests = ingest_data.get("requests", [])
-    summary_data = request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs?status=queued&limit={args.limit}")
-    summary_jobs = summary_data.get("jobs", [])
     if args.preview:
+        ingest_data = request_json(args.api_url, args.api_token, "/api/messages/ingest-requests?status=queued&limit=1")
+        summary_data = request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs?status=queued&limit={args.limit}")
         print(json.dumps({
-            "ingest_requests": ingest_requests,
-            "summary_jobs": summary_jobs,
+            "ingest_requests": ingest_data.get("requests", []),
+            "summary_jobs": summary_data.get("jobs", []),
         }, indent=2))
         return
 
-    ingest_results = [process_ingest_request(args, request) for request in ingest_requests]
-    summary_results = [process_job(args, job) for job in summary_jobs]
-    print(json.dumps({
-        "ingests_processed": len(ingest_results),
-        "summaries_processed": len(summary_results),
-        "ingest_results": ingest_results,
-        "summary_results": summary_results,
-    }, indent=2))
+    if args.daemon:
+        run_daemon(args)
+        return
+
+    print(json.dumps(process_queued_jobs(args), indent=2))
 
 
 if __name__ == "__main__":
