@@ -166,13 +166,39 @@ def clean_text(text: str, max_len: int) -> str:
     return text[:max_len]
 
 
-def resolve_contact(handle: str, group_name: str, contacts: dict[str, str]) -> str:
-    if group_name:
-        return group_name
+def resolve_handle_label(handle: str, contacts: dict[str, str]) -> str:
     for key in (normalize_handle(handle), *phone_keys(handle)):
         if key and key in contacts:
             return contacts[key]
     return handle or "Unknown"
+
+
+def resolve_group_label(group_name: str, participant_handles: str, contacts: dict[str, str]) -> str:
+    if group_name.strip():
+        return group_name.strip()
+
+    labels: list[str] = []
+    seen: set[str] = set()
+    for handle in [part for part in participant_handles.split("\x1f") if part]:
+        label = resolve_handle_label(handle, contacts)
+        key = label.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append(label)
+
+    if not labels:
+        return "Unnamed group"
+
+    visible = labels[:4]
+    suffix = f" +{len(labels) - len(visible)}" if len(labels) > len(visible) else ""
+    return f"Group: {', '.join(visible)}{suffix}"
+
+
+def resolve_contact(handle: str, group_name: str, participant_handles: str, chat_type: str, contacts: dict[str, str]) -> str:
+    if chat_type == "group":
+        return resolve_group_label(group_name, participant_handles, contacts)
+    return resolve_handle_label(handle, contacts)
 
 
 def connect_readonly(path: Path) -> sqlite3.Connection:
@@ -212,6 +238,12 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
                 m.attributedBody,
                 COALESCE(c.display_name, '') AS group_name,
                 COALESCE(c.chat_identifier, '') AS chat_identifier,
+                COALESCE((
+                    SELECT GROUP_CONCAT(h2.id, char(31))
+                    FROM chat_handle_join chj2
+                    JOIN handle h2 ON h2.ROWID = chj2.handle_id
+                    WHERE chj2.chat_id = c.ROWID
+                ), '') AS participant_handles,
                 CASE WHEN c.style = 43 THEN 'group' ELSE 'direct' END AS chat_type,
                 ROW_NUMBER() OVER (
                     PARTITION BY CASE WHEN c.style = 43 THEN COALESCE(c.chat_identifier, c.display_name, 'Unknown') ELSE COALESCE(h.id, c.chat_identifier, 'Unknown') END
@@ -232,6 +264,12 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
         SELECT
             CASE WHEN c.style = 43 THEN COALESCE(c.chat_identifier, c.display_name, 'Unknown') ELSE COALESCE(h.id, c.chat_identifier, 'Unknown') END AS handle,
             COALESCE(c.display_name, '') AS group_name,
+            COALESCE((
+                SELECT GROUP_CONCAT(h2.id, char(31))
+                FROM chat_handle_join chj2
+                JOIN handle h2 ON h2.ROWID = chj2.handle_id
+                WHERE chj2.chat_id = c.ROWID
+            ), '') AS participant_handles,
             COALESCE(m.service, h.service, '') AS service,
             CASE WHEN c.style = 43 THEN 'group' ELSE 'direct' END AS chat_type,
             COUNT(*) AS message_count,
@@ -269,7 +307,7 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
         if not text.strip():
             continue
         handle = row["handle"] or row["chat_identifier"] or ""
-        contact = resolve_contact(handle, row["group_name"], contacts)
+        contact = resolve_contact(handle, row["group_name"], row["participant_handles"], row["chat_type"], contacts)
         service = row["service"] or "unknown"
         service_counts[service] += 1
         recent.append({
@@ -286,7 +324,7 @@ def export_messages(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str,
     conversations = []
     for row in stat_rows:
         handle = row["handle"] or ""
-        contact = resolve_contact(handle, row["group_name"], contacts)
+        contact = resolve_contact(handle, row["group_name"], row["participant_handles"], row["chat_type"], contacts)
         conversations.append({
             "contact": contact,
             "handle": handle,
