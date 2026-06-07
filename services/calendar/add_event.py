@@ -125,9 +125,10 @@ def writer_command(args: list[str]) -> list[str]:
 
 
 def run_writer(args: list[str]) -> dict[str, Any]:
+    command = writer_command(args)
     try:
         result = subprocess.run(
-            writer_command(args),
+            command,
             check=False,
             capture_output=True,
             text=True,
@@ -138,7 +139,12 @@ def run_writer(args: list[str]) -> dict[str, Any]:
             "Timed out talking to Apple Calendar through EventKit. The Mac mini may need Calendar permission for the Eidos calendar tool."
         ) from exc
     if result.returncode != 0:
-        raise SystemExit(result.stderr.strip() or result.stdout.strip() or f"calendar writer failed with {result.returncode}")
+        output = result.stderr.strip() or result.stdout.strip() or f"calendar writer failed with {result.returncode}"
+        if "Calendar access denied" in output:
+            raise SystemExit(
+                f"{output}\nGrant Calendar access to ~/Applications/EidosCalendarWriter.app on the Mac mini."
+            )
+        raise SystemExit(output)
     return json.loads(result.stdout or "{}")
 
 

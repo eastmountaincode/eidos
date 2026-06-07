@@ -265,7 +265,7 @@ INSERT INTO agent_capabilities (
     'Adds structured event details to Apple Calendar on the Mac mini.',
     'python3 ~/.eidos/services/calendar/add_event.py --title "TITLE" --start "YYYY-MM-DD HH:MM"',
     'Apple Calendar on Mac mini. Default calendar: Events Ambient.',
-    'Installed, but macOS Calendar permission must be granted to ~/.eidos/services/calendar/calendar_event_writer before it can read/write calendars. Use Events Ambient for events Andrew may attend or wants visible unless he explicitly names another calendar.',
+    'Installed, but macOS Calendar permission must be granted to ~/Applications/EidosCalendarWriter.app on the Mac mini before it can read/write calendars. Use Events Ambient for events Andrew may attend or wants visible unless he explicitly names another calendar.',
     40,
     datetime('now')
   ),
