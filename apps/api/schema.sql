@@ -312,12 +312,12 @@ INSERT INTO agent_capabilities (
     'playlist-from-image',
     'skill',
     'Playlist from image',
-    'planned',
+    'stub',
     'Music',
-    'Turn an image or vibe board into an Apple Music playlist.',
-    NULL,
-    NULL,
-    'Not built yet.',
+    'Create Apple Music playlists and add matched library tracks; image-to-playlist selection is not built yet.',
+    'python3 ~/.eidos/services/music/apple_music_playlist.py --playlist "PLAYLIST" --song "TITLE|ARTIST"',
+    'Apple Music app on Mac mini; local Music library via AppleScript.',
+    'The scriptable path can create playlists and add tracks already present in Andrew’s Music library. Arbitrary Apple Music catalog search/add needs GUI automation with Accessibility permission and is not fully built yet.',
     220,
     datetime('now')
   )

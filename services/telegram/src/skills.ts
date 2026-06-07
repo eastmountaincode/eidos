@@ -52,8 +52,8 @@ const skills: Skill[] = [
   },
   {
     name: 'playlist-from-image',
-    status: 'planned',
-    summary: 'Turn an image or vibe board into an Apple Music playlist.',
+    status: 'stub',
+    summary: 'Create Apple Music playlists and add matched library tracks; image-to-playlist selection is not built yet.',
   },
 ];
 
