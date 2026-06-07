@@ -46,6 +46,11 @@ const skills: Skill[] = [
     summary: 'Read the current portal Mantra as a lightweight focus/intention for check-ins and reflection.',
   },
   {
+    name: 'memory-context',
+    status: 'active',
+    summary: 'Read and selectively write D1-backed daily history for the portal Memory timeline.',
+  },
+  {
     name: 'playlist-from-image',
     status: 'planned',
     summary: 'Turn an image or vibe board into an Apple Music playlist.',
