@@ -111,6 +111,15 @@ export default {
       return updateMantra(env, payload);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/memory') {
+      return getMemory(env, url);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/memory/history') {
+      const payload = await request.json();
+      return upsertHistoryEntry(env, payload);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/checkins/runs') {
       return getCheckinRuns(env, url);
     }
@@ -244,6 +253,103 @@ async function updateMantra(env, payload) {
   `).bind(body).run();
 
   return getMantra(env);
+}
+
+async function getMemory(env, url) {
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 120), 1), 500);
+  const selectedDate = cleanOptionalString(url.searchParams.get('date'));
+
+  const dates = await env.DB.prepare(`
+    SELECT
+      entry_date,
+      COUNT(*) AS entry_count,
+      MAX(updated_at) AS updated_at
+    FROM history_entries
+    GROUP BY entry_date
+    ORDER BY entry_date DESC
+    LIMIT ?
+  `).bind(limit).all();
+
+  const activeDate = selectedDate || dates.results[0]?.entry_date || null;
+  const entries = activeDate
+    ? await env.DB.prepare(`
+        SELECT
+          id,
+          entry_date,
+          title,
+          body,
+          source_type,
+          source_label,
+          source_ref,
+          created_at,
+          updated_at
+        FROM history_entries
+        WHERE entry_date = ?
+        ORDER BY created_at ASC, title ASC
+      `).bind(activeDate).all()
+    : { results: [] };
+
+  return json({
+    activeDate,
+    dates: dates.results,
+    entries: entries.results,
+  });
+}
+
+async function upsertHistoryEntry(env, payload) {
+  const entryDate = normalizeDate(payload.entry_date || payload.date);
+  if (!entryDate) return json({ error: 'missing valid entry_date' }, 400);
+
+  const title = cleanRequiredString(payload.title, 'title');
+  if (title.error) return title.error;
+  const body = cleanRequiredString(payload.body || payload.content, 'body');
+  if (body.error) return body.error;
+  const id = cleanOptionalString(payload.id) || crypto.randomUUID();
+
+  await env.DB.prepare(`
+    INSERT INTO history_entries (
+      id,
+      entry_date,
+      title,
+      body,
+      source_type,
+      source_label,
+      source_ref,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      entry_date = excluded.entry_date,
+      title = excluded.title,
+      body = excluded.body,
+      source_type = excluded.source_type,
+      source_label = excluded.source_label,
+      source_ref = excluded.source_ref,
+      updated_at = datetime('now')
+  `).bind(
+    id,
+    entryDate,
+    title.value,
+    body.value,
+    cleanOptionalString(payload.source_type),
+    cleanOptionalString(payload.source_label),
+    cleanOptionalString(payload.source_ref),
+  ).run();
+
+  const entry = await env.DB.prepare(`
+    SELECT *
+    FROM history_entries
+    WHERE id = ?
+  `).bind(id).first();
+
+  return json({ entry }, 201);
+}
+
+function normalizeDate(value) {
+  const raw = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const date = new Date(`${raw}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : raw;
 }
 
 async function getCheckinRuns(env, url) {

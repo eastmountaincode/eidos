@@ -1,5 +1,6 @@
 import type { CapabilitiesResponse } from "@/types/capabilities";
 import type { MantraResponse } from "@/types/mantra";
+import type { MemoryResponse } from "@/types/memory";
 import type { ConversationDetail, MessageIngestRequest, MessagesOverview, SummaryWindow } from "@/types/messages";
 
 function workerBaseUrl() {
@@ -43,6 +44,11 @@ export function getCapabilities() {
 
 export function getMantra() {
   return workerFetch<MantraResponse>("/api/mantra");
+}
+
+export function getMemory(date?: string) {
+  const query = date ? `?${new URLSearchParams({ date })}` : "";
+  return workerFetch<MemoryResponse>(`/api/memory${query}`);
 }
 
 export function updateMantra(body: string) {

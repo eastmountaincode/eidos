@@ -144,6 +144,50 @@ CREATE TABLE IF NOT EXISTS mantra_state (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS history_entries (
+  id TEXT PRIMARY KEY,
+  entry_date TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  source_type TEXT,
+  source_label TEXT,
+  source_ref TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_history_entries_date ON history_entries(entry_date DESC, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS memory_notes (
+  id TEXT PRIMARY KEY,
+  profile TEXT NOT NULL DEFAULT 'personal',
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  source_type TEXT,
+  source_label TEXT,
+  source_ref TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_notes_profile ON memory_notes(profile, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS people_notes (
+  id TEXT PRIMARY KEY,
+  person_key TEXT NOT NULL,
+  person_name TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  source_type TEXT,
+  source_label TEXT,
+  source_ref TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_people_notes_person ON people_notes(person_key, updated_at DESC);
+
 INSERT INTO agent_capabilities (
   id, kind, name, status, category, summary, invocation, data_source, notes, sort_order, updated_at
 ) VALUES
@@ -197,6 +241,19 @@ INSERT INTO agent_capabilities (
     'Cloudflare D1: mantra_state',
     'Use as a lightweight current intention, especially in morning check-ins. Do not overstate it or turn it into generic affirmation filler.',
     35,
+    datetime('now')
+  ),
+  (
+    'memory-context',
+    'tool',
+    'Memory context',
+    'active',
+    'Memory',
+    'Stores and retrieves D1-backed daily history, durable profile memory, and people notes.',
+    'python3 ~/.eidos/services/memory/memory_context.py --recent',
+    'Cloudflare D1: history_entries, memory_notes, people_notes',
+    'Portal Memory shows a date-based history timeline. Agent writes should be selective: meaningful events, conversations Andrew processed, durable preferences/patterns, and person-specific context. Do not log routine agent chores.',
+    45,
     datetime('now')
   ),
   (
