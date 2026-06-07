@@ -202,19 +202,15 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
       />
 
       <section className="grid items-start gap-3 xl:grid-cols-[minmax(620px,1fr)_minmax(320px,380px)]">
-        <section className="rounded-lg border border-border bg-white p-3">
-          <div className="mb-2 flex justify-end gap-2">
+        <section className="min-w-0 rounded-lg border border-border bg-white p-2.5 sm:p-3">
+          <div className="mb-2 flex flex-wrap justify-start gap-2 sm:justify-end">
             <WindowToggle value={overviewWindow} onChange={setOverviewWindow} />
             <ListLimitToggle value={listLimit} onChange={setListLimit} />
           </div>
-          <div className="overflow-x-auto">
-            <div className="min-w-[560px]">
-              <PeopleTable conversations={data.topConversations} limit={listLimit} onSelect={setSelectedKey} selectedKey={selectedKey} />
-            </div>
-          </div>
+          <PeopleTable conversations={data.topConversations} limit={listLimit} onSelect={setSelectedKey} selectedKey={selectedKey} />
         </section>
 
-        <aside className="rounded-lg border border-border bg-white p-3">
+        <aside className="min-w-0 rounded-lg border border-border bg-white p-2.5 sm:p-3">
           <ConversationDetail
             detail={detail}
             error={detailError}

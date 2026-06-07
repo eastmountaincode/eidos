@@ -58,7 +58,7 @@ export function PeopleTable({ conversations, limit, selectedKey, onSelect }: Peo
 
   return (
     <div className="border-t border-border">
-      <div className="grid h-8 grid-cols-[28px_minmax(112px,1fr)_76px_52px_52px_64px_96px] items-center gap-2 border-b border-border text-[11px] font-bold text-soft">
+      <div className="grid h-8 grid-cols-[24px_minmax(104px,1fr)_68px_44px_44px] items-center gap-2 border-b border-border text-[11px] font-bold text-soft sm:grid-cols-[28px_minmax(112px,1fr)_76px_52px_52px_64px_96px]">
         <span>#</span>
         {columns.map((column) => (
           <HeaderButton
@@ -97,7 +97,9 @@ function HeaderButton({
   return (
     <button
       aria-label={`${column.title}${isActive ? `, ${sortDirection === "asc" ? "ascending" : "descending"}` : ""}`}
-      className="flex min-w-0 cursor-pointer items-center gap-1 whitespace-nowrap text-left font-bold text-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+      className={`min-w-0 cursor-pointer items-center gap-1 whitespace-nowrap text-left font-bold text-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
+        column.key === "balance" || column.key === "last_active" ? "hidden sm:flex" : "flex"
+      }`}
       onClick={onClick}
       title={column.title}
       type="button"
@@ -128,7 +130,7 @@ function PersonRow({
 
   return (
     <button
-      className={`grid h-9 w-full cursor-pointer grid-cols-[28px_minmax(112px,1fr)_76px_52px_52px_64px_96px] items-center gap-2 border-b border-border text-left text-xs text-muted outline-none hover:bg-[#f4f8f7] focus-visible:shadow-[inset_3px_0_0_#0f766e] ${
+      className={`grid h-9 w-full cursor-pointer grid-cols-[24px_minmax(104px,1fr)_68px_44px_44px] items-center gap-2 border-b border-border text-left text-xs text-muted outline-none hover:bg-[#f4f8f7] focus-visible:shadow-[inset_3px_0_0_#0f766e] sm:grid-cols-[28px_minmax(112px,1fr)_76px_52px_52px_64px_96px] ${
         isSelected ? "bg-[#f4f8f7]" : ""
       }`}
       onClick={() => onSelect(conversation.conversation_key)}
@@ -139,8 +141,8 @@ function PersonRow({
       <span>{formatNumber(count)}</span>
       <span>{formatNumber(sent)}</span>
       <span>{formatNumber(received)}</span>
-      <span className="tabular-nums">{sentPct}%</span>
-      <span className="truncate">{formatShortDate(conversation.last_active)}</span>
+      <span className="hidden tabular-nums sm:block">{sentPct}%</span>
+      <span className="hidden truncate sm:block">{formatShortDate(conversation.last_active)}</span>
     </button>
   );
 }
