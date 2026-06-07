@@ -51,9 +51,9 @@ const skills: Skill[] = [
     summary: 'Read and selectively write D1-backed daily history for the portal Memory timeline.',
   },
   {
-    name: 'playlist-from-image',
-    status: 'stub',
-    summary: 'Create Apple Music playlists and add matched library tracks; image-to-playlist selection is not built yet.',
+    name: 'apple-music-playlist',
+    status: 'active',
+    summary: 'Create Apple Music playlists and add matched catalog tracks; image-to-playlist extraction is handled by the agent.',
   },
 ];
 

@@ -311,13 +311,13 @@ INSERT INTO agent_capabilities (
   (
     'playlist-from-image',
     'skill',
-    'Playlist from image',
-    'stub',
+    'Apple Music playlist',
+    'active',
     'Music',
-    'Create Apple Music playlists and add matched library tracks; image-to-playlist selection is not built yet.',
+    'Create Apple Music playlists and add matched catalog tracks; image-to-playlist extraction is handled by the agent.',
     'python3 ~/.eidos/services/music/apple_music_playlist.py --playlist "PLAYLIST" --song "TITLE|ARTIST"',
-    'Apple Music app on Mac mini; local Music library via AppleScript.',
-    'The scriptable path can create playlists and add tracks already present in Andrew’s Music library. Arbitrary Apple Music catalog search/add needs GUI automation with Accessibility permission and is not fully built yet.',
+    'Apple Music web player in a dedicated signed-in Chrome profile; MusicKit catalog and library playlist API.',
+    'Uses ~/.eidos/browser-profiles/apple-music-chrome with Chrome DevTools on localhost:9223. Verified catalog search, playlist creation, and adding Bizarre Love Triangle by New Order to Eidos Catalog Test. If authorization expires, sign into Apple Music in the dedicated Eidos Chrome profile.',
     220,
     datetime('now')
   )
