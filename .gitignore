@@ -9,6 +9,7 @@ node_modules/
 !.env.example
 *.log
 __pycache__/
+working-notes.md
 
 # Build outputs
 dist/
