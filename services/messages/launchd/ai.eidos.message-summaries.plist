@@ -11,7 +11,7 @@
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
     <key>StartInterval</key>
-    <integer>15</integer>
+    <integer>300</integer>
     <key>WorkingDirectory</key>
     <string>/Users/oasis/.eidos/services/messages</string>
     <key>ProgramArguments</key>
