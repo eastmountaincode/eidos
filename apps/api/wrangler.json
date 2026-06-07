@@ -8,5 +8,19 @@
       "database_name": "eidos",
       "database_id": "665d1614-fbe3-400e-bfdf-471c21a7cd49"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MESSAGE_JOB_WAKE",
+        "class_name": "MessageJobWake"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MessageJobWake"]
+    }
   ]
 }

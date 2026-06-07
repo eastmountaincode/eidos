@@ -26,6 +26,66 @@ function keyForConversation(item) {
   return raw.toLowerCase().replace(/[^a-z0-9@._+-]+/g, '_').slice(0, 180) || 'unknown';
 }
 
+export class MessageJobWake {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.waiters = new Set();
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+
+    if (request.method === 'GET' && url.pathname === '/wait') {
+      return this.wait(url);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/wake') {
+      const payload = await request.json().catch(() => ({}));
+      return this.wake(payload.reason || 'message_job');
+    }
+
+    return json({ error: 'not found' }, 404);
+  }
+
+  wait(url) {
+    const timeoutSeconds = Math.min(Math.max(Number(url.searchParams.get('timeout') || 300), 1), 300);
+
+    return new Promise((resolve) => {
+      const waiter = {
+        resolve,
+        timeout: setTimeout(() => {
+          this.waiters.delete(waiter);
+          resolve(json({
+            woken: false,
+            reason: 'timeout',
+            waited_seconds: timeoutSeconds,
+            returned_at: new Date().toISOString(),
+          }));
+        }, timeoutSeconds * 1000),
+      };
+      this.waiters.add(waiter);
+    });
+  }
+
+  wake(reason) {
+    const waiters = Array.from(this.waiters);
+    this.waiters.clear();
+    const payload = {
+      woken: true,
+      reason,
+      woken_at: new Date().toISOString(),
+    };
+
+    for (const waiter of waiters) {
+      clearTimeout(waiter.timeout);
+      waiter.resolve(json(payload));
+    }
+
+    return json({ ...payload, waiters: waiters.length });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -91,6 +151,10 @@ export default {
 
     if (request.method === 'GET' && url.pathname === '/api/messages/conversation') {
       return getConversationDetail(env, url);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/messages/jobs/wait') {
+      return waitForMessageJobs(env, url);
     }
 
     if (request.method === 'POST' && url.pathname === '/api/messages/summary-request') {
@@ -811,6 +875,38 @@ function parseLimit(value, defaultValue) {
   return Math.max(Math.floor(parsed), 1);
 }
 
+
+async function waitForMessageJobs(env, url) {
+  const stub = messageJobWakeStub(env);
+  if (!stub) {
+    return json({ error: 'message job wake channel is not configured' }, 503);
+  }
+
+  const timeout = Math.min(Math.max(Number(url.searchParams.get('timeout') || 300), 1), 300);
+  return stub.fetch(new Request(`https://message-job-wake/wait?timeout=${timeout}`, { method: 'GET' }));
+}
+
+async function wakeMessageJobs(env, reason) {
+  const stub = messageJobWakeStub(env);
+  if (!stub) return;
+
+  try {
+    await stub.fetch(new Request('https://message-job-wake/wake', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    }));
+  } catch (error) {
+    console.error('message job wake failed', error);
+  }
+}
+
+function messageJobWakeStub(env) {
+  if (!env.MESSAGE_JOB_WAKE) return null;
+  const id = env.MESSAGE_JOB_WAKE.idFromName('messages');
+  return env.MESSAGE_JOB_WAKE.get(id);
+}
+
 async function requestSummary(env, payload) {
   const conversationKey = String(payload.conversation_key || '');
   if (!conversationKey) {
@@ -840,6 +936,9 @@ async function requestSummary(env, payload) {
   `).bind(conversationKey, windowType).first();
 
   if (existing) {
+    if (existing.status === 'queued') {
+      await wakeMessageJobs(env, 'summary_reused');
+    }
     return json({ summary: normalizeSummary(existing), reused: true }, 202);
   }
 
@@ -864,6 +963,8 @@ async function requestSummary(env, payload) {
     WHERE id = ?
   `).bind(id).first();
 
+  await wakeMessageJobs(env, 'summary_requested');
+
   return json({ summary: normalizeSummary(summary), reused: false }, 202);
 }
 
@@ -877,6 +978,9 @@ async function requestIngest(env) {
   `).first();
 
   if (existing) {
+    if (existing.status === 'queued') {
+      await wakeMessageJobs(env, 'ingest_reused');
+    }
     return json({ request: existing, reused: true }, 202);
   }
 
@@ -892,6 +996,8 @@ async function requestIngest(env) {
     FROM message_ingest_requests
     WHERE id = ?
   `).bind(id).first();
+
+  await wakeMessageJobs(env, 'ingest_requested');
 
   return json({ request, reused: false }, 202);
 }
