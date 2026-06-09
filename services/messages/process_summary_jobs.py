@@ -72,6 +72,16 @@ def default_codex_bin() -> str:
     return "codex"
 
 
+def codex_child_env() -> dict[str, str]:
+    child_env = {
+        **os.environ,
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + os.environ.get("PATH", ""),
+    }
+    child_env.pop("CODEX_API_KEY", None)
+    child_env.pop("OPENAI_API_KEY", None)
+    return child_env
+
+
 def request_json(
     api_url: str,
     token: str,
@@ -249,10 +259,6 @@ Transcript:
         schema_path.write_text(json.dumps(schema), encoding="utf-8")
         workdir = Path(args.workdir).expanduser()
         workdir.mkdir(parents=True, exist_ok=True)
-        child_env = {
-            **os.environ,
-            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:" + os.environ.get("PATH", ""),
-        }
         result = subprocess.run(
             [
                 args.codex_bin,
@@ -272,7 +278,7 @@ Transcript:
             text=True,
             capture_output=True,
             cwd=str(workdir),
-            env=child_env,
+            env=codex_child_env(),
             timeout=300,
             check=False,
         )

@@ -22,6 +22,17 @@ type CodexJsonEvent = {
 
 const activeQueries = new Map<string, ChildProcessWithoutNullStreams>();
 
+function codexEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOME: process.env.HOME ?? '/Users/oasis',
+    PATH: config.codex.path,
+  };
+  delete env.CODEX_API_KEY;
+  delete env.OPENAI_API_KEY;
+  return env;
+}
+
 export function abortAllQueries(): void {
   for (const [key, child] of activeQueries) {
     child.kill('SIGTERM');
@@ -33,6 +44,7 @@ export function codexStatus(profile: ProfileName): string {
   return [
     'Provider: Codex CLI',
     `Model: ${config.codex.model ?? 'CLI default'}`,
+    'Auth: ChatGPT login',
     `Command: ${config.codex.binary}`,
     `Workspace: ${config.workspacePath}`,
     `Active profile: ${profile} (${profiles[profile].label})`,
@@ -74,11 +86,7 @@ async function runCodex(
   const args = buildArgs(opts.resumeSessionId);
   const child = spawn(config.codex.binary, args, {
     cwd: config.workspacePath,
-    env: {
-      ...process.env,
-      HOME: process.env.HOME ?? '/Users/oasis',
-      PATH: config.codex.path,
-    },
+    env: codexEnv(),
   });
 
   activeQueries.set(queryKey, child);
