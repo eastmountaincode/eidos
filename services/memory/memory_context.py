@@ -36,7 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--date", default="", help="History date to read or write, as YYYY-MM-DD.")
     parser.add_argument("--limit", type=int, default=20, help="Number of history dates to list when reading.")
     parser.add_argument("--add-history", action="store_true", help="Write a daily history entry.")
+    parser.add_argument("--add-note", action="store_true", help="Write a durable profile memory note.")
+    parser.add_argument("--add-person-note", action="store_true", help="Write a durable person-specific memory note.")
     parser.add_argument("--id", default="", help="Optional stable id for upserting an existing history entry.")
+    parser.add_argument("--profile", default="personal", choices=("personal", "creative", "bioinformatics"), help="Profile for durable memory notes.")
+    parser.add_argument("--person", default="", help="Person name for person-specific memory notes.")
     parser.add_argument("--title", default="", help="History entry title.")
     parser.add_argument("--body", default="", help="History entry body.")
     parser.add_argument("--source-type", default="agent", help="Source type, e.g. agent, messages, checkin, calendar.")
@@ -100,6 +104,22 @@ def read_memory(args: argparse.Namespace) -> None:
     elif args.date:
         print(f"\nNo history entries for {args.date}.")
 
+    notes = data.get("memoryNotes", [])
+    if notes:
+        print("\n## Persistent Memory")
+        for note in notes:
+            source = note.get("source_label") or note.get("source_type") or "unknown source"
+            print(f"- {note.get('title')} [{note.get('profile')}] ({source})")
+            print(f"  {compact(note.get('body') or '')}")
+
+    people_notes = data.get("peopleNotes", [])
+    if people_notes:
+        print("\n## People Notes")
+        for note in people_notes:
+            source = note.get("source_label") or note.get("source_type") or "unknown source"
+            print(f"- {note.get('person_name')} ({source})")
+            print(f"  {compact(note.get('body') or '')}")
+
 
 def write_history(args: argparse.Namespace) -> None:
     if not args.date:
@@ -129,6 +149,57 @@ def write_history(args: argparse.Namespace) -> None:
     print(f"Saved history entry: {entry.get('entry_date')} - {entry.get('title')}")
 
 
+def write_note(args: argparse.Namespace) -> None:
+    if not compact(args.title):
+        raise SystemExit("--title is required with --add-note")
+    if not compact(args.body):
+        raise SystemExit("--body is required with --add-note")
+
+    payload: dict[str, Any] = {
+        "profile": compact(args.profile),
+        "title": compact(args.title),
+        "body": compact(args.body),
+        "source_type": compact(args.source_type),
+        "source_label": compact(args.source_label),
+        "source_ref": compact(args.source_ref),
+    }
+    if args.id:
+        payload["id"] = args.id
+
+    data = request_json(args.api_url, args.api_token, "/api/memory/notes", method="POST", payload=payload)
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return
+
+    note = data.get("note") or {}
+    print(f"Saved persistent memory note: {note.get('profile')} - {note.get('title')}")
+
+
+def write_person_note(args: argparse.Namespace) -> None:
+    if not compact(args.person):
+        raise SystemExit("--person is required with --add-person-note")
+    if not compact(args.body):
+        raise SystemExit("--body is required with --add-person-note")
+
+    payload: dict[str, Any] = {
+        "person_name": compact(args.person),
+        "body": compact(args.body),
+        "source_type": compact(args.source_type),
+        "source_label": compact(args.source_label),
+        "source_ref": compact(args.source_ref),
+    }
+    if args.id:
+        payload["id"] = args.id
+
+    data = request_json(args.api_url, args.api_token, "/api/memory/people", method="POST", payload=payload)
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return
+
+    note = data.get("note") or {}
+    print(f"Saved person memory note: {note.get('person_name')}")
+
+
 def main() -> None:
     args = parse_args()
     if not args.api_url or not args.api_token:
@@ -136,6 +207,10 @@ def main() -> None:
 
     if args.add_history:
         write_history(args)
+    elif args.add_note:
+        write_note(args)
+    elif args.add_person_note:
+        write_person_note(args)
     else:
         read_memory(args)
 

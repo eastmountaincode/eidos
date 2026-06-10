@@ -48,7 +48,7 @@ const skills: Skill[] = [
   {
     name: 'memory-context',
     status: 'active',
-    summary: 'Read and selectively write D1-backed daily history for the portal Memory timeline.',
+    summary: 'Read and selectively write D1-backed daily history, persistent profile memory, and people notes.',
   },
   {
     name: 'apple-music-playlist',

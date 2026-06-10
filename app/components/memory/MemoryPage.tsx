@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { HistoryEntry, MemoryResponse } from "@/types/memory";
+import type { HistoryEntry, MemoryNote, MemoryResponse, PeopleNote } from "@/types/memory";
 
 export function MemoryPage({ initialMemory }: { initialMemory: MemoryResponse }) {
   const [memory, setMemory] = useState(initialMemory);
   const [selectedDate, setSelectedDate] = useState(initialMemory.activeDate || initialMemory.dates[0]?.entry_date || "");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const memoryNotes = memory.memoryNotes ?? [];
+  const peopleNotes = memory.peopleNotes ?? [];
 
   useEffect(() => {
     if (!selectedDate || selectedDate === memory.activeDate) return;
@@ -40,17 +42,74 @@ export function MemoryPage({ initialMemory }: { initialMemory: MemoryResponse })
     <div className="grid gap-4">
       <header>
         <h2 className="text-[26px] font-bold leading-tight">Memory</h2>
-        <p className="mt-1 text-sm text-muted">Date-based history from meaningful events, conversations, and things Andrew processed.</p>
+        <p className="mt-1 text-sm text-muted">Persistent facts and date-based history from meaningful events, conversations, and things Andrew processed.</p>
       </header>
 
-      {memory.dates.length ? (
-        <section className="grid items-start gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <DateList dates={memory.dates} selectedDate={selectedDate} onSelect={setSelectedDate} />
-          <MemoryEntries date={selectedDate} entries={memory.entries} error={error} isLoading={isLoading} />
-        </section>
+      {memoryNotes.length || peopleNotes.length ? (
+        <PersistentMemory memoryNotes={memoryNotes} peopleNotes={peopleNotes} />
       ) : (
-        <EmptyMemory />
+        <EmptyPersistentMemory />
       )}
+
+      <section className="grid gap-2">
+        <div>
+          <h3 className="text-[18px] font-bold">Daily History</h3>
+          <p className="mt-0.5 text-sm text-muted">Dated notes for things that happened or were processed on a specific day.</p>
+        </div>
+
+        {memory.dates.length ? (
+          <div className="grid items-start gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <DateList dates={memory.dates} selectedDate={selectedDate} onSelect={setSelectedDate} />
+            <MemoryEntries date={selectedDate} entries={memory.entries} error={error} isLoading={isLoading} />
+          </div>
+        ) : (
+          <EmptyHistoryMemory />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function PersistentMemory({ memoryNotes, peopleNotes }: { memoryNotes: MemoryNote[]; peopleNotes: PeopleNote[] }) {
+  return (
+    <section className="grid gap-2">
+      <div>
+        <h3 className="text-[18px] font-bold">Persistent Memory</h3>
+        <p className="mt-0.5 text-sm text-muted">Durable facts, preferences, people context, and profile-level notes.</p>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {memoryNotes.map((note) => (
+          <article className="rounded-lg border border-border bg-white p-3" key={note.id}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h4 className="text-[15px] font-bold">{note.title}</h4>
+              <span className="rounded-full bg-[#edf5f3] px-2 py-0.5 text-[11px] font-bold text-accent">{note.profile}</span>
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted">{note.body}</p>
+            <NoteMeta note={note} />
+          </article>
+        ))}
+
+        {peopleNotes.map((note) => (
+          <article className="rounded-lg border border-border bg-white p-3" key={note.id}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h4 className="text-[15px] font-bold">{note.person_name}</h4>
+              <span className="rounded-full bg-[#f8eee9] px-2 py-0.5 text-[11px] font-bold text-accent-2">person</span>
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted">{note.body}</p>
+            <NoteMeta note={note} />
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function NoteMeta({ note }: { note: MemoryNote | PeopleNote }) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-soft">
+      {note.source_label ? <span>{note.source_label}</span> : null}
+      {note.updated_at ? <span>Updated {formatDateTime(note.updated_at)}</span> : null}
     </div>
   );
 }
@@ -128,13 +187,22 @@ function MemoryEntries({
   );
 }
 
-function EmptyMemory() {
+function EmptyPersistentMemory() {
   return (
     <section className="rounded-lg border border-dashed border-border bg-white/70 p-4">
-      <h3 className="text-sm font-bold">No memory entries yet</h3>
+      <h3 className="text-sm font-bold">No persistent memory yet</h3>
       <p className="mt-1 text-sm text-muted">
-        Eidos has the D1 tables for history, profile memory, and people notes. The next step is teaching the agent when to write useful entries.
+        Eidos can store durable facts, preferences, and people context here when they should survive beyond a dated history entry.
       </p>
+    </section>
+  );
+}
+
+function EmptyHistoryMemory() {
+  return (
+    <section className="rounded-lg border border-dashed border-border bg-white/70 p-4">
+      <h3 className="text-sm font-bold">No daily history yet</h3>
+      <p className="mt-1 text-sm text-muted">Daily history stays empty unless something meaningful is worth keeping for a specific date.</p>
     </section>
   );
 }
@@ -146,5 +214,17 @@ function formatMemoryDate(value: string) {
     month: "short",
     day: "numeric",
     year: "numeric",
+  });
+}
+
+function formatDateTime(value: string) {
+  const normalized = value.includes("T") ? value : value.replace(" ", "T");
+  const date = new Date(normalized.endsWith("Z") ? normalized : `${normalized}Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }

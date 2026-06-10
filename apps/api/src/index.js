@@ -120,6 +120,16 @@ export default {
       return upsertHistoryEntry(env, payload);
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/memory/notes') {
+      const payload = await request.json();
+      return upsertMemoryNote(env, payload);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/memory/people') {
+      const payload = await request.json();
+      return upsertPeopleNote(env, payload);
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/checkins/runs') {
       return getCheckinRuns(env, url);
     }
@@ -257,6 +267,7 @@ async function updateMantra(env, payload) {
 
 async function getMemory(env, url) {
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 120), 1), 500);
+  const noteLimit = Math.min(Math.max(Number(url.searchParams.get('note_limit') || 80), 1), 250);
   const selectedDate = cleanOptionalString(url.searchParams.get('date'));
 
   const dates = await env.DB.prepare(`
@@ -289,10 +300,48 @@ async function getMemory(env, url) {
       `).bind(activeDate).all()
     : { results: [] };
 
+  const memoryNotes = await env.DB.prepare(`
+    SELECT
+      id,
+      profile,
+      title,
+      body,
+      status,
+      source_type,
+      source_label,
+      source_ref,
+      created_at,
+      updated_at
+    FROM memory_notes
+    WHERE status = 'active'
+    ORDER BY profile ASC, updated_at DESC, title ASC
+    LIMIT ?
+  `).bind(noteLimit).all();
+
+  const peopleNotes = await env.DB.prepare(`
+    SELECT
+      id,
+      person_key,
+      person_name,
+      body,
+      status,
+      source_type,
+      source_label,
+      source_ref,
+      created_at,
+      updated_at
+    FROM people_notes
+    WHERE status = 'active'
+    ORDER BY person_name ASC, updated_at DESC
+    LIMIT ?
+  `).bind(noteLimit).all();
+
   return json({
     activeDate,
     dates: dates.results,
     entries: entries.results,
+    memoryNotes: memoryNotes.results,
+    peopleNotes: peopleNotes.results,
   });
 }
 
@@ -343,6 +392,122 @@ async function upsertHistoryEntry(env, payload) {
   `).bind(id).first();
 
   return json({ entry }, 201);
+}
+
+async function upsertMemoryNote(env, payload) {
+  const title = cleanRequiredString(payload.title, 'title');
+  if (title.error) return title.error;
+  const body = cleanRequiredString(payload.body || payload.content, 'body');
+  if (body.error) return body.error;
+
+  const id = cleanOptionalString(payload.id) || crypto.randomUUID();
+  const profile = normalizeProfile(payload.profile);
+  const status = normalizeMemoryStatus(payload.status);
+
+  await env.DB.prepare(`
+    INSERT INTO memory_notes (
+      id,
+      profile,
+      title,
+      body,
+      status,
+      source_type,
+      source_label,
+      source_ref,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      profile = excluded.profile,
+      title = excluded.title,
+      body = excluded.body,
+      status = excluded.status,
+      source_type = excluded.source_type,
+      source_label = excluded.source_label,
+      source_ref = excluded.source_ref,
+      updated_at = datetime('now')
+  `).bind(
+    id,
+    profile,
+    title.value,
+    body.value,
+    status,
+    cleanOptionalString(payload.source_type),
+    cleanOptionalString(payload.source_label),
+    cleanOptionalString(payload.source_ref),
+  ).run();
+
+  const note = await env.DB.prepare(`
+    SELECT *
+    FROM memory_notes
+    WHERE id = ?
+  `).bind(id).first();
+
+  return json({ note }, 201);
+}
+
+async function upsertPeopleNote(env, payload) {
+  const personName = cleanRequiredString(payload.person_name || payload.person, 'person_name');
+  if (personName.error) return personName.error;
+  const body = cleanRequiredString(payload.body || payload.content, 'body');
+  if (body.error) return body.error;
+
+  const id = cleanOptionalString(payload.id) || crypto.randomUUID();
+  const personKey = cleanOptionalString(payload.person_key) || keyForInvoiceClient(personName.value);
+  const status = normalizeMemoryStatus(payload.status);
+
+  await env.DB.prepare(`
+    INSERT INTO people_notes (
+      id,
+      person_key,
+      person_name,
+      body,
+      status,
+      source_type,
+      source_label,
+      source_ref,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      person_key = excluded.person_key,
+      person_name = excluded.person_name,
+      body = excluded.body,
+      status = excluded.status,
+      source_type = excluded.source_type,
+      source_label = excluded.source_label,
+      source_ref = excluded.source_ref,
+      updated_at = datetime('now')
+  `).bind(
+    id,
+    personKey,
+    personName.value,
+    body.value,
+    status,
+    cleanOptionalString(payload.source_type),
+    cleanOptionalString(payload.source_label),
+    cleanOptionalString(payload.source_ref),
+  ).run();
+
+  const note = await env.DB.prepare(`
+    SELECT *
+    FROM people_notes
+    WHERE id = ?
+  `).bind(id).first();
+
+  return json({ note }, 201);
+}
+
+function normalizeProfile(value) {
+  const profile = String(value || 'personal').trim().toLowerCase();
+  if (profile === 'creative' || profile === 'bioinformatics') return profile;
+  return 'personal';
+}
+
+function normalizeMemoryStatus(value) {
+  const status = String(value || 'active').trim().toLowerCase();
+  if (status === 'archived' || status === 'inactive') return status;
+  return 'active';
 }
 
 function normalizeDate(value) {

@@ -252,7 +252,7 @@ INSERT INTO agent_capabilities (
     'Stores and retrieves D1-backed daily history, durable profile memory, and people notes.',
     'python3 ~/.eidos/services/memory/memory_context.py --recent',
     'Cloudflare D1: history_entries, memory_notes, people_notes',
-    'Portal Memory shows a date-based history timeline. Agent writes should be selective: meaningful events, conversations Andrew processed, durable preferences/patterns, and person-specific context. Do not log routine agent chores.',
+    'Portal Memory shows persistent profile memory, people notes, and a date-based history timeline. Agent writes should be selective: meaningful events, conversations Andrew processed, durable preferences/patterns, and person-specific context. Do not log routine agent chores.',
     45,
     datetime('now')
   ),

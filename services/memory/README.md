@@ -20,4 +20,16 @@ Write a daily history entry:
 python3 ~/.eidos/services/memory/memory_context.py --add-history --date 2026-06-07 --title "Title" --body "Short grounded note."
 ```
 
-Selective write rule: save things Andrew would plausibly want to see later on the Memory page. Do not save routine agent chores, generic status updates, or calendar/message facts that were not meaningful in context.
+Write durable profile memory:
+
+```sh
+python3 ~/.eidos/services/memory/memory_context.py --add-note --profile personal --title "Home address" --body "Durable fact."
+```
+
+Write person-specific memory:
+
+```sh
+python3 ~/.eidos/services/memory/memory_context.py --add-person-note --person "Name" --body "Durable relationship/context note."
+```
+
+Selective write rule: save things Andrew would plausibly want to see later on the Memory page. Daily history is for dated events or conversations. Persistent memory is for durable facts, preferences, stable personal context, and people notes. Do not save routine agent chores, generic status updates, or calendar/message facts that were not meaningful in context.
