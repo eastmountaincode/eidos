@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import type { HistoryEntry, MemoryNote, MemoryResponse, PeopleNote } from "@/types/memory";
 
+type MemoryTab = "persistent" | "history";
+
 export function MemoryPage({ initialMemory }: { initialMemory: MemoryResponse }) {
   const [memory, setMemory] = useState(initialMemory);
+  const [activeTab, setActiveTab] = useState<MemoryTab>("persistent");
   const [selectedDate, setSelectedDate] = useState(initialMemory.activeDate || initialMemory.dates[0]?.entry_date || "");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,27 +48,51 @@ export function MemoryPage({ initialMemory }: { initialMemory: MemoryResponse })
         <p className="mt-1 text-sm text-muted">Persistent facts and date-based history from meaningful events, conversations, and things Andrew processed.</p>
       </header>
 
-      {memoryNotes.length || peopleNotes.length ? (
-        <PersistentMemory memoryNotes={memoryNotes} peopleNotes={peopleNotes} />
-      ) : (
-        <EmptyPersistentMemory />
-      )}
+      <MemoryTabs activeTab={activeTab} onSelect={setActiveTab} />
 
-      <section className="grid gap-2">
-        <div>
-          <h3 className="text-[18px] font-bold">Daily History</h3>
-          <p className="mt-0.5 text-sm text-muted">Dated notes for things that happened or were processed on a specific day.</p>
-        </div>
-
-        {memory.dates.length ? (
-          <div className="grid items-start gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-            <DateList dates={memory.dates} selectedDate={selectedDate} onSelect={setSelectedDate} />
-            <MemoryEntries date={selectedDate} entries={memory.entries} error={error} isLoading={isLoading} />
-          </div>
+      {activeTab === "persistent" ? (
+        memoryNotes.length || peopleNotes.length ? (
+          <PersistentMemory memoryNotes={memoryNotes} peopleNotes={peopleNotes} />
         ) : (
-          <EmptyHistoryMemory />
-        )}
-      </section>
+          <EmptyPersistentMemory />
+        )
+      ) : memory.dates.length ? (
+        <section className="grid items-start gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <DateList dates={memory.dates} selectedDate={selectedDate} onSelect={setSelectedDate} />
+          <MemoryEntries date={selectedDate} entries={memory.entries} error={error} isLoading={isLoading} />
+        </section>
+      ) : (
+        <EmptyHistoryMemory />
+      )}
+    </div>
+  );
+}
+
+function MemoryTabs({ activeTab, onSelect }: { activeTab: MemoryTab; onSelect: (tab: MemoryTab) => void }) {
+  const tabs: Array<{ id: MemoryTab; label: string }> = [
+    { id: "persistent", label: "Persistent Memory" },
+    { id: "history", label: "Daily History" },
+  ];
+
+  return (
+    <div className="inline-grid w-full grid-cols-2 rounded-lg border border-border bg-white p-1 sm:w-fit" role="tablist" aria-label="Memory sections">
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+        return (
+          <button
+            aria-selected={isActive}
+            className={`min-h-9 rounded-md px-3 text-sm font-bold transition-colors ${
+              isActive ? "bg-sidebar text-white" : "text-muted hover:bg-[#f4f8f7] hover:text-ink"
+            }`}
+            key={tab.id}
+            onClick={() => onSelect(tab.id)}
+            role="tab"
+            type="button"
+          >
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
