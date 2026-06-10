@@ -233,14 +233,28 @@ def run_codex(args: argparse.Namespace, job: dict[str, Any], messages: list[dict
         "additionalProperties": False,
     }
 
+    other_person = job.get("display_name") or job.get("conversation_key") or "the other person"
+
+    def speaker_label(item: dict[str, Any]) -> str:
+        if item.get("direction") == "sent":
+            return "Andrew"
+        if item.get("direction") == "received":
+            return str(other_person)
+        return "Unknown speaker"
+
     transcript = "\n".join(
-        f"{item['timestamp']} {item['direction']}: {item['text']}" for item in messages
+        f"{item['timestamp']} {speaker_label(item)}: {item['text']}" for item in messages
     )
     prompt = f"""Summarize this private message conversation for Andrew.
 
-Conversation: {job.get('display_name') or job.get('conversation_key')}
+Conversation: Andrew and {other_person}
 Window: {job.get('window_type')}
 Source note: {job.get('_source_note') or 'Messages matched the requested window.'}
+
+Speaker labels are authoritative:
+- `Andrew:` means Andrew sent that message.
+- `{other_person}:` means the other person sent that message.
+- Never attribute something Andrew said to {other_person}, or something {other_person} said to Andrew.
 
 Use the fields this way:
 - summary: 3 to 6 sentences about what happened, what the conversation was circling around, and anything Andrew may want to remember.
