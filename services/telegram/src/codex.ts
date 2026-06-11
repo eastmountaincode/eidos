@@ -45,6 +45,7 @@ export function codexStatus(profile: ProfileName): string {
     'Provider: Codex CLI',
     `Model: ${config.codex.model ?? 'CLI default'}`,
     'Auth: ChatGPT login',
+    `Timeout: ${Math.round(config.codex.timeoutMs / 1000)}s`,
     `Command: ${config.codex.binary}`,
     `Workspace: ${config.workspacePath}`,
     `Active profile: ${profile} (${profiles[profile].label})`,
@@ -62,10 +63,16 @@ export async function sendMessage(
   const queryKey = `${Date.now()}-${Math.random()}`;
 
   try {
-    return await runCodex(prompt, opts, queryKey);
+    const response = await runCodex(prompt, opts, queryKey);
+    if (response.error && isTransientError(response.error)) {
+      console.log(`[codex] Transient error, retrying in 5s: ${response.error}`);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      return runCodex(prompt, opts, `${queryKey}-retry`);
+    }
+    return response;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    if (errMsg.includes('429') || errMsg.includes('ECONNRESET') || errMsg.includes('ETIMEDOUT')) {
+    if (isTransientError(errMsg)) {
       console.log(`[codex] Transient error, retrying in 5s: ${errMsg}`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
       return runCodex(prompt, opts, `${queryKey}-retry`);
@@ -95,6 +102,18 @@ async function runCodex(
   let stderr = '';
   let sessionId = opts.resumeSessionId ?? '';
   let fullText = '';
+  let timedOut = false;
+  let forceKillTimer: NodeJS.Timeout | undefined;
+  const timeoutTimer = setTimeout(() => {
+    timedOut = true;
+    stderr += `Codex timed out after ${Math.round(config.codex.timeoutMs / 1000)}s\n`;
+    child.kill('SIGTERM');
+    forceKillTimer = setTimeout(() => {
+      child.kill('SIGKILL');
+    }, 5000);
+    forceKillTimer.unref();
+  }, config.codex.timeoutMs);
+  timeoutTimer.unref();
 
   child.stdout.on('data', async (chunk: Buffer) => {
     stdout += chunk.toString('utf8');
@@ -138,6 +157,8 @@ async function runCodex(
   child.stdin.end();
 
   const exitCode = await waitForExit(child);
+  clearTimeout(timeoutTimer);
+  if (forceKillTimer) clearTimeout(forceKillTimer);
   activeQueries.delete(queryKey);
 
   if (stdout.trim()) {
@@ -145,6 +166,11 @@ async function runCodex(
     if (event?.type === 'item.completed' && event.item?.type === 'agent_message') {
       fullText = event.item.text ?? fullText;
     }
+  }
+
+  if (timedOut) {
+    const error = summarizeError(stderr) || 'Codex timed out';
+    return { text: fullText, sessionId, error };
   }
 
   if (exitCode !== 0) {
@@ -195,4 +221,17 @@ function summarizeError(stderr: string): string {
     .filter(Boolean)
     .slice(-8)
     .join('\n');
+}
+
+function isTransientError(error: string): boolean {
+  return [
+    '429',
+    'ECONNRESET',
+    'ETIMEDOUT',
+    'idle timeout',
+    'stream disconnected',
+    'websocket closed',
+    'error sending request',
+    'Can\'t assign requested address',
+  ].some((needle) => error.includes(needle));
 }
