@@ -22,6 +22,11 @@ type CodexJsonEvent = {
 
 const activeQueries = new Map<string, ChildProcessWithoutNullStreams>();
 
+type ExitResult = {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+};
+
 function codexEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -91,6 +96,8 @@ async function runCodex(
   queryKey: string,
 ): Promise<AgentResponse> {
   const args = buildArgs(opts.resumeSessionId);
+  const resumed = Boolean(opts.resumeSessionId);
+  console.log(`[codex] Starting ${resumed ? 'resume' : 'new'} query (${queryKey})`);
   const child = spawn(config.codex.binary, args, {
     cwd: config.workspacePath,
     env: codexEnv(),
@@ -156,10 +163,13 @@ async function runCodex(
   child.stdin.write(buildPrompt(prompt, opts.profile));
   child.stdin.end();
 
-  const exitCode = await waitForExit(child);
+  const exit = await waitForExit(child);
   clearTimeout(timeoutTimer);
   if (forceKillTimer) clearTimeout(forceKillTimer);
   activeQueries.delete(queryKey);
+  console.log(
+    `[codex] Finished query (${queryKey}) code=${exit.code ?? 'null'} signal=${exit.signal ?? 'none'} text=${fullText ? 'yes' : 'no'} timeout=${timedOut ? 'yes' : 'no'}`,
+  );
 
   if (stdout.trim()) {
     const event = parseEvent(stdout.trim());
@@ -173,8 +183,13 @@ async function runCodex(
     return { text: fullText, sessionId: fullText ? sessionId : '', error };
   }
 
-  if (exitCode !== 0) {
-    const error = summarizeError(stderr) || `Codex exited with code ${exitCode}`;
+  if (exit.signal) {
+    const error = summarizeError(stderr) || `Codex was interrupted by ${exit.signal}`;
+    return { text: fullText, sessionId: fullText ? sessionId : '', error };
+  }
+
+  if (exit.code !== 0) {
+    const error = summarizeError(stderr) || `Codex exited with code ${exit.code}`;
     return { text: fullText, sessionId: fullText ? sessionId : '', error };
   }
 
@@ -207,10 +222,10 @@ function parseEvent(line: string): CodexJsonEvent | undefined {
   }
 }
 
-function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
+function waitForExit(child: ChildProcessWithoutNullStreams): Promise<ExitResult> {
   return new Promise((resolve) => {
-    child.on('error', () => resolve(1));
-    child.on('close', (code) => resolve(code));
+    child.on('error', () => resolve({ code: 1, signal: null }));
+    child.on('close', (code, signal) => resolve({ code, signal }));
   });
 }
 
