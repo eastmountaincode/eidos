@@ -133,6 +133,9 @@ bot.on('message:text', async (ctx) => {
 
     if (response.sessionId) {
       setSession(key, response.sessionId, profile);
+    } else if (response.error && existing?.sessionId) {
+      deleteSession(key);
+      setProfile(key, profile);
     }
 
     const finalText = response.error
@@ -181,7 +184,12 @@ async function forwardFilePrompt(ctx: Context, prompt: string): Promise<void> {
     profile,
     resumeSessionId: existing?.sessionId || undefined,
   });
-  if (response.sessionId) setSession(key, response.sessionId, profile);
+  if (response.sessionId) {
+    setSession(key, response.sessionId, profile);
+  } else if (response.error && existing?.sessionId) {
+    deleteSession(key);
+    setProfile(key, profile);
+  }
   await sendChunked(ctx.chat!.id, response.error ? `Error: ${response.error}\n\n${response.text}` : response.text || '(no response)');
 }
 

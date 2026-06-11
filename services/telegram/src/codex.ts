@@ -170,12 +170,12 @@ async function runCodex(
 
   if (timedOut) {
     const error = summarizeError(stderr) || 'Codex timed out';
-    return { text: fullText, sessionId, error };
+    return { text: fullText, sessionId: fullText ? sessionId : '', error };
   }
 
   if (exitCode !== 0) {
     const error = summarizeError(stderr) || `Codex exited with code ${exitCode}`;
-    return { text: fullText, sessionId, error };
+    return { text: fullText, sessionId: fullText ? sessionId : '', error };
   }
 
   return { text: fullText, sessionId };
