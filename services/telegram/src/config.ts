@@ -36,6 +36,10 @@ export const config = {
     automaticRecentLimit: Number(process.env.EIDOS_MESSAGE_CONTEXT_RECENT_LIMIT || 8),
     explicitRecentLimit: Number(process.env.EIDOS_MESSAGE_CONTEXT_EXPLICIT_LIMIT || 80),
   },
+  memory: {
+    workerUrl: optionalEnv('EIDOS_WORKER_URL'),
+    apiToken: optionalEnv('EIDOS_API_TOKEN'),
+  },
   telegram: {
     maxMessageLength: 4096,
     editDebounceMs: 1000,

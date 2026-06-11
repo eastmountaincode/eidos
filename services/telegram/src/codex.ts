@@ -96,6 +96,7 @@ async function runCodex(
   queryKey: string,
 ): Promise<AgentResponse> {
   const args = buildArgs(opts.resumeSessionId);
+  const runtimePrompt = await buildPrompt(prompt, opts.profile);
   const resumed = Boolean(opts.resumeSessionId);
   console.log(`[codex] Starting ${resumed ? 'resume' : 'new'} query (${queryKey})`);
   const child = spawn(config.codex.binary, args, {
@@ -160,7 +161,7 @@ async function runCodex(
     stderr += `${err.message}\n`;
   });
 
-  child.stdin.write(buildPrompt(prompt, opts.profile));
+  child.stdin.write(runtimePrompt);
   child.stdin.end();
 
   const exit = await waitForExit(child);

@@ -2,12 +2,26 @@ import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import { config, profiles, type ProfileName } from './config.js';
 
+type MemoryResponse = {
+  memoryNotes?: Array<{
+    profile?: string;
+    title?: string;
+    body?: string;
+    updated_at?: string;
+  }>;
+  peopleNotes?: Array<{
+    person_name?: string;
+    body?: string;
+    updated_at?: string;
+  }>;
+};
+
 function readIfExists(path: string): string {
   if (!existsSync(path)) return '';
   return readFileSync(path, 'utf-8').trim();
 }
 
-export function buildPrompt(userText: string, profile: ProfileName): string {
+export async function buildPrompt(userText: string, profile: ProfileName): Promise<string> {
   const root = config.workspacePath;
   const identity = readIfExists(resolve(root, 'shared/IDENTITY.md'));
   const profileIndex = readIfExists(resolve(root, 'shared/PROFILE_INDEX.md'));
@@ -15,6 +29,7 @@ export function buildPrompt(userText: string, profile: ProfileName): string {
   const memory = readIfExists(resolve(root, `profiles/${profile}/MEMORY.md`));
   const history = readIfExists(resolve(root, `profiles/${profile}/HISTORY.md`));
   const profileInfo = profiles[profile];
+  const d1Memory = await readPersistentMemory(profile);
 
   return [
     '# Eidos Runtime Context',
@@ -26,6 +41,9 @@ export function buildPrompt(userText: string, profile: ProfileName): string {
     `## ${profileInfo.label} Memory`,
     memory || '(empty)',
     '',
+    '## D1 Persistent Memory',
+    d1Memory,
+    '',
     `## ${profileInfo.label} History`,
     history || '(empty)',
     '',
@@ -33,6 +51,7 @@ export function buildPrompt(userText: string, profile: ProfileName): string {
     '- You are Eidos, not Clawd, OpenClaw, or Claude.',
     '- Be concise, direct, and grounded in available data.',
     '- Do not infer stale projects, obligations, or priorities from old agent notes.',
+    '- Before asking Andrew for stable personal facts such as home address, recurring preferences, or durable profile context, check the D1 Persistent Memory block and use it when it answers the question.',
     '- Write D1 history entries selectively when something would be meaningful for Andrew to see later on the portal Memory timeline. Do not ask "should I remember this"; use judgment, and when confidence is low, do not write.',
     '- Good history entries: events Andrew attended and then processed, meaningful plans or text conversations, relationship shifts, decisions, realizations, creative/work milestones, or unresolved threads likely to matter in a future check-in.',
     '- Write D1 persistent memory notes for durable facts, stable preferences, personal context, and profile-level facts Andrew will expect you to know later, such as addresses, recurring preferences, client defaults, or enduring project context.',
@@ -58,4 +77,49 @@ export function buildPrompt(userText: string, profile: ProfileName): string {
     '## User Message',
     userText,
   ].join('\n');
+}
+
+async function readPersistentMemory(profile: ProfileName): Promise<string> {
+  if (!config.memory.workerUrl || !config.memory.apiToken) {
+    throw new Error('Persistent memory unavailable: EIDOS_WORKER_URL and EIDOS_API_TOKEN are required');
+  }
+
+  const url = new URL('/api/memory', config.memory.workerUrl);
+  url.searchParams.set('limit', '5');
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${config.memory.apiToken}`,
+      'User-Agent': 'Eidos/0.1',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Persistent memory unavailable: ${response.status} ${response.statusText}`);
+  }
+
+  const data = (await response.json()) as MemoryResponse;
+  const lines: string[] = [];
+  const profileNotes = (data.memoryNotes ?? []).filter((note) => !note.profile || note.profile === profile);
+  const peopleNotes = data.peopleNotes ?? [];
+
+  if (profileNotes.length) {
+    lines.push('Profile notes:');
+    for (const note of profileNotes) {
+      lines.push(`- ${compact(note.title || 'Untitled')}: ${compact(note.body || '')}`);
+    }
+  }
+
+  if (peopleNotes.length) {
+    lines.push('People notes:');
+    for (const note of peopleNotes.slice(0, 12)) {
+      lines.push(`- ${compact(note.person_name || 'Unknown')}: ${compact(note.body || '')}`);
+    }
+  }
+
+  return lines.length ? lines.join('\n') : '(empty)';
+}
+
+function compact(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
