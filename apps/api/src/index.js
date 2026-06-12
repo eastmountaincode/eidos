@@ -125,9 +125,17 @@ export default {
       return upsertMemoryNote(env, payload);
     }
 
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/memory/notes/')) {
+      return archiveMemoryNote(env, decodeURIComponent(url.pathname.slice('/api/memory/notes/'.length)));
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/memory/people') {
       const payload = await request.json();
       return upsertPeopleNote(env, payload);
+    }
+
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/memory/people/')) {
+      return archivePeopleNote(env, decodeURIComponent(url.pathname.slice('/api/memory/people/'.length)));
     }
 
     if (request.method === 'GET' && url.pathname === '/api/checkins/runs') {
@@ -314,7 +322,7 @@ async function getMemory(env, url) {
       updated_at
     FROM memory_notes
     WHERE status = 'active'
-    ORDER BY profile ASC, updated_at DESC, title ASC
+    ORDER BY updated_at DESC, created_at DESC, title ASC
     LIMIT ?
   `).bind(noteLimit).all();
 
@@ -332,7 +340,7 @@ async function getMemory(env, url) {
       updated_at
     FROM people_notes
     WHERE status = 'active'
-    ORDER BY person_name ASC, updated_at DESC
+    ORDER BY updated_at DESC, created_at DESC, person_name ASC
     LIMIT ?
   `).bind(noteLimit).all();
 
@@ -496,6 +504,34 @@ async function upsertPeopleNote(env, payload) {
   `).bind(id).first();
 
   return json({ note }, 201);
+}
+
+async function archiveMemoryNote(env, id) {
+  const noteId = cleanOptionalString(id);
+  if (!noteId) return json({ error: 'missing note id' }, 400);
+
+  const result = await env.DB.prepare(`
+    UPDATE memory_notes
+    SET status = 'archived', updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(noteId).run();
+
+  if (!result.meta?.changes) return json({ error: 'memory note not found' }, 404);
+  return json({ deleted: true, id: noteId, kind: 'memory' });
+}
+
+async function archivePeopleNote(env, id) {
+  const noteId = cleanOptionalString(id);
+  if (!noteId) return json({ error: 'missing note id' }, 400);
+
+  const result = await env.DB.prepare(`
+    UPDATE people_notes
+    SET status = 'archived', updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(noteId).run();
+
+  if (!result.meta?.changes) return json({ error: 'people note not found' }, 404);
+  return json({ deleted: true, id: noteId, kind: 'person' });
 }
 
 function normalizeProfile(value) {

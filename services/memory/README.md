@@ -32,4 +32,4 @@ Write person-specific memory:
 python3 ~/.eidos/services/memory/memory_context.py --add-person-note --person "Name" --body "Durable relationship/context note."
 ```
 
-Selective write rule: save things Andrew would plausibly want to see later on the Memory page. Daily history is for dated events or conversations. Persistent memory is for durable facts, preferences, stable personal context, and people notes. Do not save routine agent chores, generic status updates, or calendar/message facts that were not meaningful in context.
+Selective write rule: save things Andrew would plausibly want to see later on the Memory page. Daily history is for dated events or conversations. Persistent memory is for durable facts, preferences, stable personal context, and people notes. Do not save routine agent chores, generic status updates, calendar/message facts that were not meaningful in context, or contact-resolution facts like mapping a phone number to a name.

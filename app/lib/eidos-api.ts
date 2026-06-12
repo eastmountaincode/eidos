@@ -51,6 +51,13 @@ export function getMemory(date?: string) {
   return workerFetch<MemoryResponse>(`/api/memory${query}`);
 }
 
+export function deleteMemoryNote(kind: "memory" | "person", id: string) {
+  const pathKind = kind === "person" ? "people" : "notes";
+  return workerFetch<{ deleted: boolean; id: string; kind: string }>(`/api/memory/${pathKind}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export function updateMantra(body: string) {
   return workerFetch<MantraResponse>("/api/mantra", {
     method: "POST",
