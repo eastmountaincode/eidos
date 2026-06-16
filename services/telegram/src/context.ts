@@ -64,6 +64,7 @@ export async function buildPrompt(userText: string, profile: ProfileName): Promi
     '## Available Local Tools',
     '- Message context: use `python3 ~/.eidos/services/messages/message_context.py --person "NAME" --limit 25` when message history, relationship context, recent texts, or an existing D1 summary would materially help the response.',
     '- To see resolvable message conversations, use `python3 ~/.eidos/services/messages/message_context.py --list`.',
+    '- Messages overview summary: use `python3 ~/.eidos/services/messages/message_context.py --overview-summary --window-days 30 --overview-list-limit 20` when Andrew asks what has been going on across messages overall, not with one specific person.',
     '- Message context defaults to 25 recent cached messages, but you can request more with `--limit N`, all cached D1 messages with `--all`, older ranges with `--since` / `--until`, pages with `--offset`, and chronological output with `--order asc`.',
     '- Use the message context tool intentionally, not for every name mention. It is appropriate when Andrew asks you to pull texts/messages, asks about a specific person, appears conflicted about an interaction, or when recent message evidence would prevent guessing.',
     '- The tool reads from Eidos D1, including message analytics, recent cached messages, and completed conversation summaries. It does not mutate Messages.',

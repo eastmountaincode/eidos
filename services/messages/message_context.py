@@ -23,6 +23,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--until", default="", help="Only include cached messages at or before this ISO timestamp/date.")
     parser.add_argument("--offset", type=int, default=0, help="Skip this many matched messages for pagination.")
     parser.add_argument("--order", choices=("asc", "desc"), default="desc", help="Message order from D1.")
+    parser.add_argument("--overview-summary", action="store_true", help="Print the latest Messages overview summary instead of fetching one conversation.")
+    parser.add_argument("--window-days", type=int, default=30, choices=(7, 30), help="Overview summary window when using --overview-summary.")
+    parser.add_argument("--overview-list-limit", default="20", help="Overview summary list size, usually 20 or all.")
     parser.add_argument("--list-limit", default="all", help="Known conversations to scan/list. Use a number or 'all'.")
     parser.add_argument("--list", action="store_true", help="List known conversations instead of fetching one.")
     return parser.parse_args()
@@ -98,6 +101,38 @@ def print_conversation_list(api_url: str, token: str, list_limit: str) -> None:
         received = conversation.get("received_count") or 0
         last_active = conversation.get("last_active") or "unknown"
         print(f"- {name} ({key}): {total} messages, me {sent}, them {received}, last active {last_active}")
+
+
+def print_overview_summary(api_url: str, token: str, window_days: int, list_limit: str) -> None:
+    query = urllib.parse.urlencode({
+        "window_days": window_days,
+        "list_limit": list_limit,
+    })
+    data = request_json(api_url, token, f"/api/messages/view-summary?{query}")
+    summary = data.get("summary")
+    if not summary:
+        print("# Messages Overview Summary")
+        print(f"Window: {window_days} days")
+        print(f"List: {list_limit}")
+        print("No overview summary has been generated yet.")
+        return
+
+    print("# Messages Overview Summary")
+    print(f"Window: {summary.get('window_days')} days")
+    print(f"List: {summary.get('list_limit')}")
+    print(f"Status: {summary.get('status')}")
+    print(f"Generated: {summary.get('generated_at') or 'not generated'}")
+    print(f"Conversations: {summary.get('conversation_count') or 0}")
+    print(f"Messages: {summary.get('message_count') or 0}")
+    if summary.get("source_start_at") and summary.get("source_end_at"):
+        print(f"Range: {summary.get('source_start_at')} to {summary.get('source_end_at')}")
+    if summary.get("summary"):
+        print(f"\nSummary: {compact(summary.get('summary'))}")
+    themes = summary.get("themes") or []
+    if themes:
+        print("Themes: " + "; ".join(compact(str(theme)) for theme in themes))
+    if summary.get("error"):
+        print(f"Error: {compact(summary.get('error'))}")
 
 
 def print_message_context(
@@ -176,6 +211,9 @@ def main() -> None:
     args = parse_args()
     if not args.api_url or not args.api_token:
         raise SystemExit("EIDOS_WORKER_URL and EIDOS_API_TOKEN are required")
+    if args.overview_summary:
+        print_overview_summary(args.api_url, args.api_token, args.window_days, args.overview_list_limit)
+        return
     if args.list:
         print_conversation_list(args.api_url, args.api_token, args.list_limit)
         return

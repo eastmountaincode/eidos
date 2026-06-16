@@ -76,6 +76,30 @@ CREATE TABLE IF NOT EXISTS conversation_summaries (
 CREATE INDEX IF NOT EXISTS idx_conversation_summaries_conversation ON conversation_summaries(conversation_key, requested_at DESC);
 CREATE INDEX IF NOT EXISTS idx_conversation_summaries_status ON conversation_summaries(status, requested_at);
 
+CREATE TABLE IF NOT EXISTS message_view_summaries (
+  id TEXT PRIMARY KEY,
+  view_key TEXT NOT NULL,
+  window_days INTEGER NOT NULL,
+  list_limit TEXT NOT NULL,
+  conversation_keys_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued',
+  requested_at TEXT DEFAULT (datetime('now')),
+  started_at TEXT,
+  generated_at TEXT,
+  message_count INTEGER DEFAULT 0,
+  conversation_count INTEGER DEFAULT 0,
+  source_start_at TEXT,
+  source_end_at TEXT,
+  summary TEXT,
+  themes_json TEXT,
+  model TEXT,
+  error TEXT,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_view_summaries_view ON message_view_summaries(view_key, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_message_view_summaries_status ON message_view_summaries(status, requested_at);
+
 CREATE TABLE IF NOT EXISTS agent_capabilities (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL CHECK (kind IN ('tool', 'skill')),
@@ -199,8 +223,8 @@ INSERT INTO agent_capabilities (
     'Messages',
     'Fetches D1-backed iMessage/SMS context for a person when the agent needs message evidence.',
     'python3 ~/.eidos/services/messages/message_context.py --person "NAME" --limit 25',
-    'Cloudflare D1: message_conversations, message_items, conversation_summaries',
-    'Default is compact. Use --limit N, --all, --since, --until, --offset, and --order when Andrew asks for more or older cached message context.',
+    'Cloudflare D1: message_conversations, message_items, conversation_summaries, message_view_summaries',
+    'Default is compact. Use --limit N, --all, --since, --until, --offset, and --order for one conversation. Use --overview-summary for the latest cross-conversation Messages view summary.',
     10,
     datetime('now')
   ),

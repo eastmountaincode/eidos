@@ -22,7 +22,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -310,6 +310,204 @@ Transcript:
         return json.loads(output_path.read_text(encoding="utf-8"))
 
 
+def window_label(window_days: int | str | None) -> str:
+    if int(window_days or 30) == 7:
+        return "Last week"
+    return "Last 30 days"
+
+
+def list_limit_label(list_limit: str | int | None) -> str:
+    value = str(list_limit or "20")
+    if value == "all":
+        return "All visible conversations"
+    return f"Top {value}"
+
+
+def parse_json_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if not value:
+        return []
+    try:
+        parsed = json.loads(str(value))
+    except json.JSONDecodeError:
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def fetch_view_context(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]:
+    window_days = int(job.get("window_days") or 30)
+    list_limit = str(job.get("list_limit") or "20")
+    conversation_keys = [str(key) for key in parse_json_list(job.get("conversation_keys_json")) if str(key).strip()]
+    if not conversation_keys:
+        raise RuntimeError("view summary job has no conversation keys")
+
+    overview = request_json(
+        args.api_url,
+        args.api_token,
+        f"/api/messages/overview?{urllib.parse.urlencode({'window_days': window_days})}",
+    )
+    overview_by_key = {
+        conversation.get("conversation_key"): conversation
+        for conversation in overview.get("topConversations", [])
+    }
+    since = (datetime.now(tz=timezone.utc) - timedelta(days=window_days)).isoformat(timespec="seconds")
+    rows: list[dict[str, Any]] = []
+    total_messages = 0
+    latest_seen = overview.get("latestRun", {}).get("last_message_at")
+
+    for conversation_key in conversation_keys:
+        conversation = overview_by_key.get(conversation_key)
+        if not conversation:
+            continue
+
+        total_messages += int(conversation.get("message_count") or 0)
+        if conversation.get("last_active") and (not latest_seen or str(conversation["last_active"]) > str(latest_seen)):
+            latest_seen = conversation["last_active"]
+
+        query = urllib.parse.urlencode({
+            "conversation_key": conversation_key,
+            "limit": 4,
+            "since": since,
+            "order": "desc",
+        })
+        try:
+            detail = request_json(args.api_url, args.api_token, f"/api/messages/conversation?{query}")
+        except Exception:
+            detail = {"recentMessages": [], "summaries": []}
+
+        latest_summary = next(
+            (
+                summary for summary in detail.get("summaries", [])
+                if summary.get("status") == "completed" and summary.get("summary")
+            ),
+            None,
+        )
+        rows.append({
+            "conversation": conversation,
+            "recent_messages": detail.get("recentMessages", []),
+            "latest_summary": latest_summary,
+        })
+
+    if not rows:
+        raise RuntimeError("no current view conversations were available in D1")
+
+    return {
+        "window_days": window_days,
+        "list_limit": list_limit,
+        "since": since,
+        "source_end_at": latest_seen or datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+        "conversation_count": len(rows),
+        "message_count": total_messages,
+        "rows": rows,
+    }
+
+
+def run_view_codex(args: argparse.Namespace, job: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    if not shutil.which(args.codex_bin) and not Path(args.codex_bin).exists():
+        raise RuntimeError("codex CLI not found")
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string"},
+            "themes": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["summary", "themes"],
+        "additionalProperties": False,
+    }
+
+    sections: list[str] = []
+    for index, row in enumerate(context["rows"], start=1):
+        conversation = row["conversation"]
+        total = int(conversation.get("message_count") or 0)
+        sent = int(conversation.get("sent_count") or 0)
+        received = int(conversation.get("received_count") or 0)
+        name = conversation.get("display_name") or conversation.get("conversation_key") or "Unknown"
+        lines = [
+            f"{index}. {name}",
+            f"Messages: {total}; Andrew sent: {sent}; Other side sent: {received}; Last active: {conversation.get('last_active') or 'unknown'}",
+        ]
+        latest_summary = row.get("latest_summary")
+        if latest_summary:
+            lines.append(f"Latest conversation summary: {clean_text(latest_summary.get('summary') or '', 700)}")
+            themes = latest_summary.get("themes") or []
+            if themes:
+                lines.append("Latest conversation themes: " + "; ".join(clean_text(str(theme), 80) for theme in themes))
+
+        recent = row.get("recent_messages") or []
+        if recent:
+            lines.append("Recent cached messages, newest first:")
+            for item in recent:
+                speaker = "Andrew" if item.get("direction") == "sent" else name
+                body = clean_text(item.get("body") or "", 350)
+                if body:
+                    lines.append(f"- {item.get('timestamp') or 'unknown time'} {speaker}: {body}")
+        sections.append("\n".join(lines))
+
+    prompt = f"""Summarize Andrew's current Messages portal view.
+
+View: {window_label(context['window_days'])}, {list_limit_label(context['list_limit'])}
+Conversations included: {context['conversation_count']}
+Messages in this view/window: {context['message_count']}
+
+The rows below are the exact conversations visible when Andrew requested the summary. Speaker labels are authoritative:
+- `Andrew:` means Andrew sent that message.
+- The other displayed name means that person or group sent that message.
+
+Write for Andrew, not for a report. Focus on what seems to be going on across his messages: active people, plans, recurring topics, unresolved loops, notable tone, and anything he may want to keep in context. Do not over-interpret. Do not invent facts outside the rows. If a section is thin, say that plainly. Do not include long quotes.
+
+Return:
+- summary: 4 to 7 concise sentences.
+- themes: 5 to 10 short phrases covering topics, tone, people clusters, or open loops.
+
+Rows:
+{chr(10).join(sections)}
+"""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        schema_path = Path(tmp) / "view-summary-schema.json"
+        output_path = Path(tmp) / "view-summary.json"
+        schema_path.write_text(json.dumps(schema), encoding="utf-8")
+        workdir = Path(args.workdir).expanduser()
+        workdir.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [
+                args.codex_bin,
+                "exec",
+                "--skip-git-repo-check",
+                "--sandbox",
+                "read-only",
+                "--model",
+                args.codex_model,
+                "--output-schema",
+                str(schema_path),
+                "-o",
+                str(output_path),
+                "Create a structured summary of the current Messages overview.",
+            ],
+            input=prompt,
+            text=True,
+            capture_output=True,
+            cwd=str(workdir),
+            env=codex_child_env(),
+            timeout=300,
+            check=False,
+        )
+        if result.returncode != 0:
+            details = {
+                "error": "codex exec failed",
+                "returncode": result.returncode,
+                "codex_bin": args.codex_bin,
+                "model": args.codex_model,
+                "workdir": str(workdir),
+                "stdout_tail": (result.stdout or "").strip()[-1000:],
+                "stderr_tail": (result.stderr or "").strip()[-1000:],
+            }
+            raise RuntimeError(json.dumps(details, ensure_ascii=False))
+        return json.loads(output_path.read_text(encoding="utf-8"))
+
+
 def process_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]:
     started_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
     update_summary_job(args, job["id"], {
@@ -357,8 +555,45 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]
     return update_summary_job(args, job["id"], payload)
 
 
+def process_view_summary_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]:
+    started_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
+    update_view_summary_job(args, job["id"], {
+        "status": "running",
+        "started_at": started_at,
+        "error": None,
+    })
+    try:
+        context = fetch_view_context(args, job)
+        result = run_view_codex(args, job, context)
+        payload = {
+            "status": "completed",
+            "started_at": started_at,
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+            "message_count": context["message_count"],
+            "conversation_count": context["conversation_count"],
+            "source_start_at": context["since"],
+            "source_end_at": context["source_end_at"],
+            "summary": result.get("summary", ""),
+            "themes": result.get("themes", []),
+            "model": f"codex exec {args.codex_model}",
+            "error": None,
+        }
+    except Exception as exc:
+        payload = {
+            "status": "failed",
+            "started_at": started_at,
+            "error": str(exc),
+        }
+
+    return update_view_summary_job(args, job["id"], payload)
+
+
 def update_summary_job(args: argparse.Namespace, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     return request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs/{urllib.parse.quote(job_id)}", payload)
+
+
+def update_view_summary_job(args: argparse.Namespace, job_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return request_json(args.api_url, args.api_token, f"/api/messages/view-summary-jobs/{urllib.parse.quote(job_id)}", payload)
 
 
 def process_ingest_request(args: argparse.Namespace, request: dict[str, Any]) -> dict[str, Any]:
@@ -406,14 +641,19 @@ def process_queued_jobs(args: argparse.Namespace) -> dict[str, Any]:
     ingest_requests = ingest_data.get("requests", [])
     summary_data = request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs?status=queued&limit={args.limit}")
     summary_jobs = summary_data.get("jobs", [])
+    view_summary_data = request_json(args.api_url, args.api_token, f"/api/messages/view-summary-jobs?status=queued&limit={args.limit}")
+    view_summary_jobs = view_summary_data.get("jobs", [])
 
     ingest_results = [process_ingest_request(args, request) for request in ingest_requests]
     summary_results = [process_job(args, job) for job in summary_jobs]
+    view_summary_results = [process_view_summary_job(args, job) for job in view_summary_jobs]
     return {
         "ingests_processed": len(ingest_results),
         "summaries_processed": len(summary_results),
+        "view_summaries_processed": len(view_summary_results),
         "ingest_results": ingest_results,
         "summary_results": summary_results,
+        "view_summary_results": view_summary_results,
     }
 
 
@@ -448,7 +688,7 @@ def run_daemon(args: argparse.Namespace) -> None:
     while not stopped:
         try:
             result = process_queued_jobs(args)
-            if result["ingests_processed"] or result["summaries_processed"]:
+            if result["ingests_processed"] or result["summaries_processed"] or result["view_summaries_processed"]:
                 print(json.dumps({
                     "event": "jobs_processed",
                     "processed_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
@@ -484,9 +724,11 @@ def main() -> None:
     if args.preview:
         ingest_data = request_json(args.api_url, args.api_token, "/api/messages/ingest-requests?status=queued&limit=1")
         summary_data = request_json(args.api_url, args.api_token, f"/api/messages/summary-jobs?status=queued&limit={args.limit}")
+        view_summary_data = request_json(args.api_url, args.api_token, f"/api/messages/view-summary-jobs?status=queued&limit={args.limit}")
         print(json.dumps({
             "ingest_requests": ingest_data.get("requests", []),
             "summary_jobs": summary_data.get("jobs", []),
+            "view_summary_jobs": view_summary_data.get("jobs", []),
         }, indent=2))
         return
 

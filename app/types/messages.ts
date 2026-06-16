@@ -60,6 +60,27 @@ export type ConversationSummary = {
   updated_at?: string | null;
 };
 
+export type MessageViewSummary = {
+  id: string;
+  view_key?: string | null;
+  window_days: 7 | 30 | number;
+  list_limit: "20" | "all" | string;
+  conversation_keys?: string[];
+  status: "queued" | "running" | "completed" | "failed";
+  requested_at?: string | null;
+  started_at?: string | null;
+  generated_at?: string | null;
+  message_count?: number | null;
+  conversation_count?: number | null;
+  source_start_at?: string | null;
+  source_end_at?: string | null;
+  summary?: string | null;
+  themes?: string[];
+  model?: string | null;
+  error?: string | null;
+  updated_at?: string | null;
+};
+
 export type MessagesOverview = {
   status: "active" | "pending" | string;
   latestRun?: MessageRun | null;

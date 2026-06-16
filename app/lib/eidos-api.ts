@@ -1,7 +1,7 @@
 import type { CapabilitiesResponse } from "@/types/capabilities";
 import type { MantraResponse } from "@/types/mantra";
 import type { MemoryResponse } from "@/types/memory";
-import type { ConversationDetail, MessageIngestRequest, MessagesOverview, SummaryWindow } from "@/types/messages";
+import type { ConversationDetail, MessageIngestRequest, MessageViewSummary, MessagesOverview, SummaryWindow } from "@/types/messages";
 
 function workerBaseUrl() {
   const workerUrl = process.env.EIDOS_WORKER_URL;
@@ -82,6 +82,28 @@ export function requestConversationSummary(conversationKey: string, windowType: 
     body: JSON.stringify({
       conversation_key: conversationKey,
       window_type: windowType,
+    }),
+  });
+}
+
+export function getMessageViewSummary(windowDays: number, listLimit: string, conversationKeys: string[]) {
+  const query = new URLSearchParams({
+    window_days: String(windowDays),
+    list_limit: listLimit,
+  });
+  for (const key of conversationKeys) {
+    query.append("conversation_key", key);
+  }
+  return workerFetch<{ summary: MessageViewSummary | null }>(`/api/messages/view-summary?${query}`);
+}
+
+export function requestMessageViewSummary(windowDays: number, listLimit: string, conversationKeys: string[]) {
+  return workerFetch<{ summary: MessageViewSummary; reused: boolean }>("/api/messages/view-summary-request", {
+    method: "POST",
+    body: JSON.stringify({
+      window_days: windowDays,
+      list_limit: listLimit,
+      conversation_keys: conversationKeys,
     }),
   });
 }

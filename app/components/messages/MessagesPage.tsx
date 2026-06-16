@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { ConversationDetail as ConversationDetailType, MessagesOverview, SummaryWindow } from "@/types/messages";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Conversation, ConversationDetail as ConversationDetailType, MessageViewSummary, MessagesOverview, SummaryWindow } from "@/types/messages";
 import { ConversationDetail } from "./ConversationDetail";
 import { PeopleTable } from "./PeopleTable";
 import { shortSource } from "./format";
 import { SummaryLine } from "./SummaryLine";
+import { ViewSummaryPanel } from "./ViewSummaryPanel";
 
 type OverviewWindow = 7 | 30;
 type ListLimit = 20 | "all";
@@ -24,6 +25,20 @@ async function fetchMessagesOverview(windowDays: OverviewWindow) {
   return response.json() as Promise<MessagesOverview>;
 }
 
+async function fetchMessageViewSummary(windowDays: OverviewWindow, listLimit: ListLimit, conversationKeys: string[]) {
+  const query = new URLSearchParams({
+    window_days: String(windowDays),
+    list_limit: String(listLimit),
+  });
+  for (const key of conversationKeys) {
+    query.append("conversation_key", key);
+  }
+
+  const response = await fetch(`/api/message-view-summary?${query}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<{ summary: MessageViewSummary | null }>;
+}
+
 function remoteTime(value?: string | null) {
   if (!value) return 0;
   const normalized = /^\d{4}-\d{2}-\d{2} /.test(value) ? `${value.replace(" ", "T")}Z` : value;
@@ -36,11 +51,35 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
   const [overviewWindow, setOverviewWindow] = useState<OverviewWindow>(30);
   const [listLimit, setListLimit] = useState<ListLimit>(20);
   const [selectedKey, setSelectedKey] = useState("");
+  const [visibleConversations, setVisibleConversations] = useState<Conversation[]>(() => initialData.topConversations.slice(0, 20));
   const [detail, setDetail] = useState<ConversationDetailType | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [isRequestingSummary, setIsRequestingSummary] = useState(false);
+  const [viewSummary, setViewSummary] = useState<MessageViewSummary | null>(null);
+  const [isLoadingViewSummary, setIsLoadingViewSummary] = useState(false);
+  const [isRequestingViewSummary, setIsRequestingViewSummary] = useState(false);
+  const [viewSummaryError, setViewSummaryError] = useState("");
   const [isRequestingIngest, setIsRequestingIngest] = useState(false);
+  const visibleConversationKeys = useMemo(
+    () => visibleConversations.map((conversation) => conversation.conversation_key),
+    [visibleConversations],
+  );
+  const visibleConversationKeySignature = visibleConversationKeys.join("\n");
+  const visibleMessageCount = useMemo(
+    () => visibleConversations.reduce((total, conversation) => total + Number(conversation.message_count || 0), 0),
+    [visibleConversations],
+  );
+  const handleSelectConversation = useCallback((conversationKey: string) => {
+    setSelectedKey(conversationKey);
+    if (!conversationKey) {
+      setDetail(null);
+      setDetailError("");
+    }
+  }, []);
+  const handleVisibleChange = useCallback((conversations: Conversation[]) => {
+    setVisibleConversations(conversations);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +181,60 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
     };
   }, [data.latestIngestRequest?.status, isRequestingIngest, overviewWindow, selectedKey]);
 
+  const loadViewSummary = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
+    const keys = visibleConversationKeySignature ? visibleConversationKeySignature.split("\n") : [];
+    if (!keys.length) {
+      setViewSummary(null);
+      return null;
+    }
+
+    if (!quiet) {
+      setIsLoadingViewSummary(true);
+      setViewSummaryError("");
+    }
+
+    try {
+      const response = await fetchMessageViewSummary(overviewWindow, listLimit, keys);
+      setViewSummary(response.summary);
+      return response.summary;
+    } catch (error) {
+      setViewSummaryError(`Could not load current view summary: ${String(error)}`);
+      return null;
+    } finally {
+      if (!quiet) setIsLoadingViewSummary(false);
+    }
+  }, [listLimit, overviewWindow, visibleConversationKeySignature]);
+
+  useEffect(() => {
+    if (selectedKey) return;
+    void loadViewSummary();
+  }, [loadViewSummary, selectedKey]);
+
+  useEffect(() => {
+    if (selectedKey) return;
+    const status = viewSummary?.status;
+    if (!isRequestingViewSummary && !["queued", "running"].includes(status || "")) return;
+
+    let cancelled = false;
+    const interval = window.setInterval(() => {
+      loadViewSummary({ quiet: true })
+        .then((summary) => {
+          if (cancelled) return;
+          if (!["queued", "running"].includes(summary?.status || "")) {
+            setIsRequestingViewSummary(false);
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) setViewSummaryError(`Could not refresh current view summary: ${String(error)}`);
+        });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [isRequestingViewSummary, loadViewSummary, selectedKey, viewSummary?.status]);
+
   async function requestSummary(windowType: SummaryWindow) {
     if (!selectedKey) return;
 
@@ -163,6 +256,35 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
       setDetailError(`Summary request failed: ${String(error)}`);
     } finally {
       setIsRequestingSummary(false);
+    }
+  }
+
+  async function requestViewSummary() {
+    const keys = visibleConversationKeySignature ? visibleConversationKeySignature.split("\n") : [];
+    if (!keys.length) return;
+
+    setIsRequestingViewSummary(true);
+    setViewSummaryError("");
+    try {
+      const response = await fetch("/api/message-view-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          window_days: overviewWindow,
+          list_limit: String(listLimit),
+          conversation_keys: keys,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const next = (await response.json()) as { summary: MessageViewSummary };
+      setViewSummary(next.summary);
+      if (!["queued", "running"].includes(next.summary?.status || "")) {
+        setIsRequestingViewSummary(false);
+      }
+    } catch (error) {
+      setIsRequestingViewSummary(false);
+      setViewSummaryError(`Current view summary request failed: ${String(error)}`);
     }
   }
 
@@ -207,17 +329,37 @@ export function MessagesPage({ initialData }: { initialData: MessagesOverview })
             <WindowToggle value={overviewWindow} onChange={setOverviewWindow} />
             <ListLimitToggle value={listLimit} onChange={setListLimit} />
           </div>
-          <PeopleTable conversations={data.topConversations} limit={listLimit} onSelect={setSelectedKey} selectedKey={selectedKey} />
+          <PeopleTable
+            conversations={data.topConversations}
+            limit={listLimit}
+            onSelect={handleSelectConversation}
+            onVisibleChange={handleVisibleChange}
+            selectedKey={selectedKey}
+          />
         </section>
 
         <aside className="min-w-0 rounded-lg border border-border bg-white p-2.5 sm:p-3">
-          <ConversationDetail
-            detail={detail}
-            error={detailError}
-            isLoading={isLoadingDetail}
-            isRequestingSummary={isRequestingSummary}
-            onRequestSummary={requestSummary}
-          />
+          {selectedKey ? (
+            <ConversationDetail
+              detail={detail}
+              error={detailError}
+              isLoading={isLoadingDetail}
+              isRequestingSummary={isRequestingSummary}
+              onRequestSummary={requestSummary}
+            />
+          ) : (
+            <ViewSummaryPanel
+              error={viewSummaryError}
+              isLoading={isLoadingViewSummary}
+              isRequesting={isRequestingViewSummary}
+              listLimit={listLimit}
+              messageCount={visibleMessageCount}
+              onRequestSummary={requestViewSummary}
+              summary={viewSummary}
+              visibleCount={visibleConversations.length}
+              windowDays={overviewWindow}
+            />
+          )}
         </aside>
       </section>
 

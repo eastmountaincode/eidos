@@ -10,6 +10,7 @@ type PeopleTableProps = {
   limit: 20 | "all";
   selectedKey: string;
   onSelect: (conversationKey: string) => void;
+  onVisibleChange?: (conversations: Conversation[]) => void;
 };
 
 type SortKey = "person" | "messages" | "me" | "them" | "balance" | "last_active";
@@ -24,7 +25,7 @@ const columns: Array<{ key: SortKey; label: string; title: string }> = [
   { key: "last_active", label: "Last active", title: "Sort by last active time" },
 ];
 
-export function PeopleTable({ conversations, limit, selectedKey, onSelect }: PeopleTableProps) {
+export function PeopleTable({ conversations, limit, selectedKey, onSelect, onVisibleChange }: PeopleTableProps) {
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: "messages",
     direction: "desc",
@@ -44,6 +45,10 @@ export function PeopleTable({ conversations, limit, selectedKey, onSelect }: Peo
       onSelect("");
     }
   }, [onSelect, selectedKey, visibleConversations]);
+
+  useEffect(() => {
+    onVisibleChange?.(visibleConversations);
+  }, [onVisibleChange, visibleConversations]);
 
   if (!conversations.length) {
     return <p className="rounded-lg border border-dashed border-border bg-white/60 p-4 text-sm text-muted">No conversations ingested yet.</p>;
@@ -133,7 +138,7 @@ function PersonRow({
       className={`grid h-9 w-full cursor-pointer grid-cols-[24px_minmax(104px,1fr)_68px_44px_44px] items-center gap-2 border-b border-border text-left text-xs text-muted outline-none hover:bg-[#f4f8f7] focus-visible:shadow-[inset_3px_0_0_#0f766e] sm:grid-cols-[28px_minmax(112px,1fr)_76px_52px_52px_64px_96px] ${
         isSelected ? "bg-[#f4f8f7]" : ""
       }`}
-      onClick={() => onSelect(conversation.conversation_key)}
+      onClick={() => onSelect(isSelected ? "" : conversation.conversation_key)}
       type="button"
     >
       <span className="font-bold tabular-nums text-soft">{index + 1}</span>

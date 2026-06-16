@@ -189,6 +189,15 @@ export default {
       return requestSummary(env, payload);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/messages/view-summary') {
+      return getViewSummary(env, url);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/messages/view-summary-request') {
+      const payload = await request.json();
+      return requestViewSummary(env, payload);
+    }
+
     if (request.method === 'POST' && url.pathname === '/api/messages/ingest-request') {
       return requestIngest(env);
     }
@@ -211,6 +220,16 @@ export default {
     if (request.method === 'POST' && completeMatch) {
       const payload = await request.json();
       return completeSummaryJob(env, completeMatch[1], payload);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/messages/view-summary-jobs') {
+      return getViewSummaryJobs(env, url);
+    }
+
+    const completeViewMatch = url.pathname.match(/^\/api\/messages\/view-summary-jobs\/([^/]+)$/);
+    if (request.method === 'POST' && completeViewMatch) {
+      const payload = await request.json();
+      return completeViewSummaryJob(env, completeViewMatch[1], payload);
     }
 
     if (request.method === 'POST' && url.pathname === '/api/messages/ingest') {
@@ -1275,6 +1294,86 @@ async function requestSummary(env, payload) {
   return json({ summary: normalizeSummary(summary), reused: false }, 202);
 }
 
+async function getViewSummary(env, url) {
+  const windowDays = normalizeOverviewWindow(url.searchParams.get('window_days'));
+  const listLimit = normalizeViewListLimit(url.searchParams.get('list_limit'));
+  const conversationKeys = normalizeConversationKeys(url.searchParams.getAll('conversation_key'));
+
+  let summary;
+  if (conversationKeys.length) {
+    const viewKey = await viewKeyFor(windowDays, listLimit, conversationKeys);
+    summary = await env.DB.prepare(`
+      SELECT *
+      FROM message_view_summaries
+      WHERE view_key = ?
+      ORDER BY requested_at DESC
+      LIMIT 1
+    `).bind(viewKey).first();
+  } else {
+    summary = await env.DB.prepare(`
+      SELECT *
+      FROM message_view_summaries
+      WHERE window_days = ?
+        AND list_limit = ?
+      ORDER BY requested_at DESC
+      LIMIT 1
+    `).bind(windowDays, listLimit).first();
+  }
+
+  return json({ summary: normalizeViewSummary(summary) });
+}
+
+async function requestViewSummary(env, payload) {
+  const windowDays = normalizeOverviewWindow(payload.window_days);
+  const listLimit = normalizeViewListLimit(payload.list_limit);
+  const conversationKeys = normalizeConversationKeys(payload.conversation_keys);
+  if (!conversationKeys.length) {
+    return json({ error: 'conversation_keys required' }, 400);
+  }
+
+  const viewKey = await viewKeyFor(windowDays, listLimit, conversationKeys);
+  const existing = await env.DB.prepare(`
+    SELECT *
+    FROM message_view_summaries
+    WHERE view_key = ?
+      AND status IN ('queued', 'running')
+    ORDER BY requested_at DESC
+    LIMIT 1
+  `).bind(viewKey).first();
+
+  if (existing) {
+    if (existing.status === 'queued') {
+      await wakeMessageJobs(env, 'view_summary_reused');
+    }
+    return json({ summary: normalizeViewSummary(existing), reused: true }, 202);
+  }
+
+  const id = crypto.randomUUID();
+  await env.DB.prepare(`
+    INSERT INTO message_view_summaries (
+      id, view_key, window_days, list_limit, conversation_keys_json,
+      conversation_count, status, requested_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'queued', datetime('now'), datetime('now'))
+  `).bind(
+    id,
+    viewKey,
+    windowDays,
+    listLimit,
+    JSON.stringify(conversationKeys),
+    conversationKeys.length,
+  ).run();
+
+  const summary = await env.DB.prepare(`
+    SELECT *
+    FROM message_view_summaries
+    WHERE id = ?
+  `).bind(id).first();
+
+  await wakeMessageJobs(env, 'view_summary_requested');
+
+  return json({ summary: normalizeViewSummary(summary), reused: false }, 202);
+}
+
 async function requestIngest(env) {
   const existing = await env.DB.prepare(`
     SELECT *
@@ -1452,6 +1551,74 @@ async function completeSummaryJob(env, id, payload) {
   return json({ summary: normalizeSummary(summary) });
 }
 
+async function getViewSummaryJobs(env, url) {
+  const status = url.searchParams.get('status') || 'queued';
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 5), 1), 20);
+
+  const jobs = await env.DB.prepare(`
+    SELECT *
+    FROM message_view_summaries
+    WHERE status = ?
+    ORDER BY requested_at ASC
+    LIMIT ?
+  `).bind(status, limit).all();
+
+  return json({ jobs: jobs.results.map(normalizeViewSummary) });
+}
+
+async function completeViewSummaryJob(env, id, payload) {
+  const status = normalizeSummaryStatus(payload.status);
+  const themesJson = payload.themes_json
+    ? JSON.stringify(payload.themes_json)
+    : payload.themes
+      ? JSON.stringify(payload.themes)
+      : null;
+
+  await env.DB.prepare(`
+    UPDATE message_view_summaries
+    SET
+      status = ?,
+      started_at = COALESCE(started_at, ?),
+      generated_at = CASE WHEN ? = 'completed' THEN COALESCE(?, datetime('now')) ELSE generated_at END,
+      message_count = COALESCE(?, message_count),
+      conversation_count = COALESCE(?, conversation_count),
+      source_start_at = COALESCE(?, source_start_at),
+      source_end_at = COALESCE(?, source_end_at),
+      summary = COALESCE(?, summary),
+      themes_json = COALESCE(?, themes_json),
+      model = COALESCE(?, model),
+      error = ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    status,
+    payload.started_at || null,
+    status,
+    payload.generated_at || null,
+    payload.message_count ?? null,
+    payload.conversation_count ?? null,
+    payload.source_start_at || null,
+    payload.source_end_at || null,
+    payload.summary || null,
+    themesJson,
+    payload.model || null,
+    payload.error || null,
+    id,
+  ).run();
+
+  const summary = await env.DB.prepare(`
+    SELECT *
+    FROM message_view_summaries
+    WHERE id = ?
+  `).bind(id).first();
+
+  if (!summary) {
+    return json({ error: 'view summary job not found' }, 404);
+  }
+
+  return json({ summary: normalizeViewSummary(summary) });
+}
+
 function normalizeSummaryStatus(value) {
   if (value === 'failed') return 'failed';
   if (value === 'running') return 'running';
@@ -1595,6 +1762,45 @@ function normalizeSummary(summary) {
     ...summary,
     themes: parseJson(summary.themes_json, []),
   };
+}
+
+function normalizeViewSummary(summary) {
+  if (!summary) return null;
+  return {
+    ...summary,
+    conversation_keys: parseJson(summary.conversation_keys_json, []),
+    themes: parseJson(summary.themes_json, []),
+  };
+}
+
+function normalizeViewListLimit(value) {
+  if (value === 'all') return 'all';
+  const parsed = Number(value || 20);
+  if (!Number.isFinite(parsed) || parsed < 1) return '20';
+  return String(Math.floor(parsed));
+}
+
+function normalizeConversationKeys(value) {
+  const values = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  const keys = [];
+  for (const item of values) {
+    const key = String(item || '').trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    keys.push(key);
+  }
+  return keys.slice(0, 250);
+}
+
+async function viewKeyFor(windowDays, listLimit, conversationKeys) {
+  const hash = await sha256Hex(JSON.stringify(conversationKeys));
+  return `${windowDays}:${listLimit}:${hash}`;
+}
+
+async function sha256Hex(value) {
+  const buffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function parseJson(value, fallback) {
