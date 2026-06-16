@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import re
+import textwrap
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -168,8 +169,14 @@ def draw_text_lines(canvas: Any, x: float, y: float, lines: list[str], leading: 
     return y
 
 
-def truncate(text: str, max_chars: int) -> str:
-    return text if len(text) <= max_chars else text[: max_chars - 1] + "..."
+def wrap_description(text: str, width: int = 72) -> list[str]:
+    return textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False) or [""]
+
+
+def format_quantity(value: float) -> str:
+    if value.is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".")
 
 
 def create_invoice(args: argparse.Namespace) -> dict[str, Any]:
@@ -270,17 +277,20 @@ def create_invoice(args: argparse.Namespace) -> dict[str, Any]:
     for item in items:
         amount = item.amount
         total += amount
+        description_lines = wrap_description(item.description)
+        row_height = 18 + (len(description_lines) - 1) * 11
         y -= 18
-        if y < 120:
+        if y - row_height < 120:
             pdf.showPage()
             y = height - 60
             pdf.setFont("Helvetica", 9)
         pdf.setFillColor(dark)
-        pdf.drawString(margin, y, truncate(item.description, 58))
-        pdf.drawRightString(365, y, f"{item.quantity:g}")
+        for index, line in enumerate(description_lines):
+            pdf.drawString(margin, y - index * 11, line)
+        pdf.drawRightString(365, y, format_quantity(item.quantity))
         pdf.drawRightString(440, y, money(item.rate))
         pdf.drawRightString(right, y, money(amount))
-        y -= 8
+        y -= 8 + (len(description_lines) - 1) * 11
         pdf.setStrokeColor(light_gray)
         pdf.line(margin, y, right, y)
 
