@@ -169,8 +169,21 @@ def draw_text_lines(canvas: Any, x: float, y: float, lines: list[str], leading: 
     return y
 
 
-def wrap_description(text: str, width: int = 72) -> list[str]:
-    return textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False) or [""]
+def wrap_description(canvas: Any, text: str, max_width: float, font_name: str = "Helvetica", font_size: float = 9) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if not current or canvas.stringWidth(candidate, font_name, font_size) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+
+    if current:
+        lines.append(current)
+
+    return lines or [""]
 
 
 def format_quantity(value: float) -> str:
@@ -277,7 +290,7 @@ def create_invoice(args: argparse.Namespace) -> dict[str, Any]:
     for item in items:
         amount = item.amount
         total += amount
-        description_lines = wrap_description(item.description)
+        description_lines = wrap_description(pdf, item.description, max_width=265)
         row_height = 18 + (len(description_lines) - 1) * 11
         y -= 18
         if y - row_height < 120:
