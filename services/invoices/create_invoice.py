@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=str(eidos_home / "data/invoices/config.json"))
     parser.add_argument("--client", required=True, help="Client or organization name.")
+    parser.add_argument("--bill-to-name", default=None, help="Visible bill-to name. Defaults to --client. Pass an empty string to leave it blank.")
     parser.add_argument("--client-address", action="append", default=[], help="Client address line. Repeat for multiple lines.")
     parser.add_argument("--invoice-number", default="", help="Manual invoice number. Defaults to D1-backed per-client numbering.")
     parser.add_argument("--invoice-digits", type=int, default=3, help="Minimum digits for automatic invoice numbers. Default: 3.")
@@ -215,6 +216,7 @@ def create_invoice(args: argparse.Namespace) -> dict[str, Any]:
     invoice_date = args.date or datetime.now().strftime("%B %-d, %Y")
     from_name = config.get("from_name") or "Andrew Boylan"
     from_address = [str(line) for line in config.get("from_address", []) if str(line).strip()]
+    bill_to_name = args.client if args.bill_to_name is None else args.bill_to_name
     client_address = [line for line in args.client_address if line.strip()]
     payment_lines = args.payment_line or [str(line) for line in config.get("payment_lines", []) if str(line).strip()]
     output_dir = Path(args.output_dir or config.get("output_dir") or "~/.eidos/data/outbox/invoices").expanduser()
@@ -259,7 +261,7 @@ def create_invoice(args: argparse.Namespace) -> dict[str, Any]:
     pdf.setFont("Helvetica-Bold", 10)
     pdf.setFillColor(dark)
     pdf.drawString(margin, y, from_name)
-    pdf.drawString(300, y, args.client)
+    pdf.drawString(300, y, bill_to_name)
 
     y -= 13
     pdf.setFont("Helvetica", 9)
