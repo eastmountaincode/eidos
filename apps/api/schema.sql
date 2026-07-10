@@ -116,6 +116,23 @@ CREATE TABLE IF NOT EXISTS agent_capabilities (
 
 CREATE INDEX IF NOT EXISTS idx_agent_capabilities_kind ON agent_capabilities(kind, sort_order, name);
 
+CREATE TABLE IF NOT EXISTS style_entries (
+  id TEXT PRIMARY KEY,
+  source_text TEXT NOT NULL,
+  kind TEXT,
+  url TEXT,
+  captured_at TEXT,
+  context TEXT,
+  notes TEXT,
+  tags_json TEXT,
+  file_path TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_style_entries_kind ON style_entries(kind, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_style_entries_updated ON style_entries(updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS invoice_clients (
   client_key TEXT PRIMARY KEY,
   client_name TEXT NOT NULL,

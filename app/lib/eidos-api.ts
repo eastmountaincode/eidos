@@ -2,6 +2,7 @@ import type { CapabilitiesResponse } from "@/types/capabilities";
 import type { MantraResponse } from "@/types/mantra";
 import type { MemoryResponse } from "@/types/memory";
 import type { ConversationDetail, MessageIngestRequest, MessageViewSummary, MessagesOverview, SummaryWindow } from "@/types/messages";
+import type { StyleEntry, StylesResponse } from "@/types/styles";
 
 function workerBaseUrl() {
   const workerUrl = process.env.EIDOS_WORKER_URL;
@@ -49,6 +50,18 @@ export function getMantra() {
 export function getMemory(date?: string) {
   const query = date ? `?${new URLSearchParams({ date })}` : "";
   return workerFetch<MemoryResponse>(`/api/memory${query}`);
+}
+
+export function getStyles(kind?: string) {
+  const query = kind ? `?${new URLSearchParams({ kind })}` : "";
+  return workerFetch<StylesResponse>(`/api/styles${query}`);
+}
+
+export function saveStyle(entry: Partial<StyleEntry> & Pick<StyleEntry, "source_text">) {
+  return workerFetch<{ entry: StyleEntry }>("/api/styles", {
+    method: "POST",
+    body: JSON.stringify(entry),
+  });
 }
 
 export function deleteMemoryNote(kind: "memory" | "person", id: string) {

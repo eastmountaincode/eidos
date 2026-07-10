@@ -102,6 +102,19 @@ export default {
       return getCapabilities(env);
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/styles') {
+      return getStyleEntries(env, url);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/styles') {
+      return upsertStyleEntry(env, null, await request.json());
+    }
+
+    const styleMatch = url.pathname.match(/^\/api\/styles\/([^/]+)$/);
+    if (request.method === 'POST' && styleMatch) {
+      return upsertStyleEntry(env, decodeURIComponent(styleMatch[1]), await request.json());
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/mantra') {
       return getMantra(env);
     }
@@ -260,6 +273,59 @@ async function getCapabilities(env) {
   `).all();
 
   return json({ capabilities: capabilities.results });
+}
+
+async function getStyleEntries(env, url) {
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
+  const kind = String(url.searchParams.get('kind') || '').trim();
+  const entries = kind
+    ? await env.DB.prepare('SELECT * FROM style_entries WHERE kind = ? ORDER BY updated_at DESC LIMIT ?').bind(kind, limit).all()
+    : await env.DB.prepare('SELECT * FROM style_entries ORDER BY updated_at DESC LIMIT ?').bind(limit).all();
+  return json({ entries: entries.results.map(normalizeStyleEntry) });
+}
+
+function normalizeStyleTags(tags) {
+  if (Array.isArray(tags)) return tags.map((tag) => String(tag).trim()).filter(Boolean);
+  if (typeof tags !== 'string') return [];
+  const parsed = parseJson(tags, null);
+  return Array.isArray(parsed) ? normalizeStyleTags(parsed) : tags.split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+
+function styleSlug(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+}
+
+function normalizeStyleEntry(entry) {
+  return entry ? { ...entry, tags: parseJson(entry.tags_json, []) } : null;
+}
+
+async function upsertStyleEntry(env, id, payload) {
+  const requestedId = String(id || payload.id || '').trim();
+  const existing = requestedId ? await env.DB.prepare('SELECT * FROM style_entries WHERE id = ?').bind(requestedId).first() : null;
+  const sourceText = String(payload.source_text || payload.sourceText || existing?.source_text || '').trim();
+  if (!sourceText) return json({ error: 'missing source_text' }, 400);
+
+  const entry = {
+    id: requestedId || styleSlug(sourceText) || crypto.randomUUID(),
+    source_text: sourceText,
+    kind: payload.kind ? String(payload.kind).trim() : existing?.kind || null,
+    url: payload.url ? String(payload.url).trim() : existing?.url || null,
+    captured_at: payload.captured_at ? String(payload.captured_at).trim() : existing?.captured_at || null,
+    context: payload.context ? String(payload.context).trim() : existing?.context || null,
+    notes: payload.notes ? String(payload.notes).trim() : existing?.notes || null,
+    tags_json: JSON.stringify(normalizeStyleTags(payload.tags ?? payload.tags_json ?? existing?.tags_json)),
+    file_path: payload.file_path ? String(payload.file_path).trim() : existing?.file_path || null,
+  };
+
+  await env.DB.prepare(`
+    INSERT INTO style_entries (id, source_text, kind, url, captured_at, context, notes, tags_json, file_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET source_text = excluded.source_text, kind = excluded.kind, url = excluded.url,
+      captured_at = excluded.captured_at, context = excluded.context, notes = excluded.notes,
+      tags_json = excluded.tags_json, file_path = excluded.file_path, updated_at = datetime('now')
+  `).bind(entry.id, entry.source_text, entry.kind, entry.url, entry.captured_at, entry.context, entry.notes, entry.tags_json, entry.file_path).run();
+
+  return json({ entry: normalizeStyleEntry(await env.DB.prepare('SELECT * FROM style_entries WHERE id = ?').bind(entry.id).first()) }, 201);
 }
 
 async function getMantra(env) {

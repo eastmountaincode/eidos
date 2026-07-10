@@ -1,0 +1,14 @@
+# Runtime state and side projects stay local.
+data/
+logs/
+keys/
+browser-profiles/
+overnight/
+apps/portal/
+apps/semantic-atlas/
+api/
+middleware.js
+services/calendar/*.app/
+services/calendar/calendar_event_writer
+services/checkins/*.app/
+services/checkins/calendar_reader
