@@ -50,7 +50,7 @@ export function codexStatus(profile: ProfileName): string {
     'Provider: Codex CLI',
     `Model: ${config.codex.model ?? 'CLI default'}`,
     'Auth: ChatGPT login',
-    `Timeout: ${Math.round(config.codex.timeoutMs / 1000)}s`,
+    `Timeout: ${config.codex.timeoutMs > 0 ? `${Math.round(config.codex.timeoutMs / 1000)}s` : 'disabled'}`,
     `Command: ${config.codex.binary}`,
     `Workspace: ${config.workspacePath}`,
     `Active profile: ${profile} (${profiles[profile].label})`,
@@ -112,16 +112,18 @@ async function runCodex(
   let fullText = '';
   let timedOut = false;
   let forceKillTimer: NodeJS.Timeout | undefined;
-  const timeoutTimer = setTimeout(() => {
-    timedOut = true;
-    stderr += `Codex timed out after ${Math.round(config.codex.timeoutMs / 1000)}s\n`;
-    child.kill('SIGTERM');
-    forceKillTimer = setTimeout(() => {
-      child.kill('SIGKILL');
-    }, 5000);
-    forceKillTimer.unref();
-  }, config.codex.timeoutMs);
-  timeoutTimer.unref();
+  const timeoutTimer = config.codex.timeoutMs > 0
+    ? setTimeout(() => {
+        timedOut = true;
+        stderr += `Codex timed out after ${Math.round(config.codex.timeoutMs / 1000)}s\n`;
+        child.kill('SIGTERM');
+        forceKillTimer = setTimeout(() => {
+          child.kill('SIGKILL');
+        }, 5000);
+        forceKillTimer.unref();
+      }, config.codex.timeoutMs)
+    : undefined;
+  timeoutTimer?.unref();
 
   child.stdout.on('data', async (chunk: Buffer) => {
     stdout += chunk.toString('utf8');
@@ -165,7 +167,7 @@ async function runCodex(
   child.stdin.end();
 
   const exit = await waitForExit(child);
-  clearTimeout(timeoutTimer);
+  if (timeoutTimer) clearTimeout(timeoutTimer);
   if (forceKillTimer) clearTimeout(forceKillTimer);
   activeQueries.delete(queryKey);
   console.log(

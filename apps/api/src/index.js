@@ -310,6 +310,7 @@ async function upsertStyleEntry(env, id, payload) {
     source_text: sourceText,
     kind: payload.kind ? String(payload.kind).trim() : existing?.kind || null,
     url: payload.url ? String(payload.url).trim() : existing?.url || null,
+    preview_url: payload.preview_url ? String(payload.preview_url).trim() : existing?.preview_url || null,
     captured_at: payload.captured_at ? String(payload.captured_at).trim() : existing?.captured_at || null,
     context: payload.context ? String(payload.context).trim() : existing?.context || null,
     notes: payload.notes ? String(payload.notes).trim() : existing?.notes || null,
@@ -318,12 +319,12 @@ async function upsertStyleEntry(env, id, payload) {
   };
 
   await env.DB.prepare(`
-    INSERT INTO style_entries (id, source_text, kind, url, captured_at, context, notes, tags_json, file_path, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    INSERT INTO style_entries (id, source_text, kind, url, preview_url, captured_at, context, notes, tags_json, file_path, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     ON CONFLICT(id) DO UPDATE SET source_text = excluded.source_text, kind = excluded.kind, url = excluded.url,
-      captured_at = excluded.captured_at, context = excluded.context, notes = excluded.notes,
+      preview_url = excluded.preview_url, captured_at = excluded.captured_at, context = excluded.context, notes = excluded.notes,
       tags_json = excluded.tags_json, file_path = excluded.file_path, updated_at = datetime('now')
-  `).bind(entry.id, entry.source_text, entry.kind, entry.url, entry.captured_at, entry.context, entry.notes, entry.tags_json, entry.file_path).run();
+  `).bind(entry.id, entry.source_text, entry.kind, entry.url, entry.preview_url, entry.captured_at, entry.context, entry.notes, entry.tags_json, entry.file_path).run();
 
   return json({ entry: normalizeStyleEntry(await env.DB.prepare('SELECT * FROM style_entries WHERE id = ?').bind(entry.id).first()) }, 201);
 }

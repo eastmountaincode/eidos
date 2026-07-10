@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-text", default="", help="Raw source phrase, reference, object, or effect name.")
     parser.add_argument("--kind", default="", help="Entry kind, e.g. text-effect, loader, image, component.")
     parser.add_argument("--url", default="", help="Source URL.")
+    parser.add_argument("--preview-url", default="", help="Direct image URL used for the portal card preview.")
     parser.add_argument("--captured-at", default="", help="Capture date or timestamp.")
     parser.add_argument("--context", default="", help="Why this style matters or where Andrew found it.")
     parser.add_argument("--notes", default="", help="Implementation notes, description, or reproduction detail.")
@@ -105,6 +106,7 @@ def add_entry(args: argparse.Namespace) -> None:
         "source_text": compact(args.source_text),
         "kind": compact(args.kind),
         "url": compact(args.url),
+        "preview_url": compact(args.preview_url),
         "captured_at": compact(args.captured_at),
         "context": compact(args.context),
         "notes": compact(args.notes),

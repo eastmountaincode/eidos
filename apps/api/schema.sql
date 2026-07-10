@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS style_entries (
   source_text TEXT NOT NULL,
   kind TEXT,
   url TEXT,
+  preview_url TEXT,
   captured_at TEXT,
   context TEXT,
   notes TEXT,

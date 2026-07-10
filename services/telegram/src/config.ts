@@ -19,6 +19,11 @@ function optionalEnv(name: string): string | undefined {
   return value ? value : undefined;
 }
 
+function nonNegativeNumberEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
 export const config = {
   telegramBotToken: requireEnv('TELEGRAM_BOT_TOKEN'),
   telegramChatId: requireEnv('TELEGRAM_CHAT_ID'),
@@ -28,7 +33,7 @@ export const config = {
     binary: process.env.CODEX_BINARY || '/opt/homebrew/bin/codex',
     model: optionalEnv('CODEX_MODEL'),
     path: process.env.PATH || '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-    timeoutMs: Number(process.env.EIDOS_CODEX_TIMEOUT_MS || 240_000),
+    timeoutMs: nonNegativeNumberEnv('EIDOS_CODEX_TIMEOUT_MS', 0),
   },
   messages: {
     workerUrl: optionalEnv('EIDOS_WORKER_URL'),
