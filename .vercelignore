@@ -6,7 +6,7 @@ browser-profiles/
 overnight/
 apps/portal/
 apps/semantic-atlas/
-api/
+/api/
 middleware.js
 services/calendar/*.app/
 services/calendar/calendar_event_writer
