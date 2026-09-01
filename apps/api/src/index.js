@@ -1723,20 +1723,44 @@ async function ingestMessages(env, payload) {
     stats.last_message_at || null,
   ).run();
 
-  await env.DB.prepare('DELETE FROM message_items').run();
-  await env.DB.prepare(`
-    UPDATE message_conversations
-    SET message_count = 0,
-        sent_count = 0,
-        received_count = 0,
-        updated_at = datetime('now')
-  `).run();
+  const storedConversationRows = await env.DB.prepare(`
+    SELECT
+      conversation_key,
+      display_name,
+      handle,
+      chat_type,
+      message_count,
+      sent_count,
+      received_count,
+      last_active
+    FROM message_conversations
+  `).all();
+  const storedConversations = new Map(
+    storedConversationRows.results.map((row) => [row.conversation_key, row]),
+  );
 
-  const conversationKeys = new Set();
-  const conversationStatements = [];
+  const incomingConversations = new Map();
   for (const conversation of conversations) {
     const conversationKey = keyForConversation(conversation);
-    conversationKeys.add(conversationKey);
+    incomingConversations.set(conversationKey, {
+      conversation_key: conversationKey,
+      display_name: conversation.contact || conversation.handle || 'Unknown',
+      handle: conversation.handle || null,
+      chat_type: conversation.chat_type || null,
+      message_count: Number(conversation.message_count || 0),
+      sent_count: Number(conversation.sent_count || 0),
+      received_count: Number(conversation.received_count || 0),
+      last_active: conversation.last_active || null,
+    });
+  }
+
+  const conversationStatements = [];
+  let conversationsUpserted = 0;
+  let conversationsCleared = 0;
+  for (const [conversationKey, conversation] of incomingConversations) {
+    const stored = storedConversations.get(conversationKey);
+    if (stored && conversationRowsEqual(stored, conversation)) continue;
+
     conversationStatements.push(env.DB.prepare(`
       INSERT INTO message_conversations (
         conversation_key, display_name, handle, chat_type, message_count,
@@ -1753,27 +1777,65 @@ async function ingestMessages(env, payload) {
         updated_at = datetime('now')
     `).bind(
       conversationKey,
-      conversation.contact || conversation.handle || 'Unknown',
-      conversation.handle || null,
-      conversation.chat_type || null,
-      conversation.message_count || 0,
-      conversation.sent_count || 0,
-      conversation.received_count || 0,
-      conversation.last_active || null,
+      conversation.display_name,
+      conversation.handle,
+      conversation.chat_type,
+      conversation.message_count,
+      conversation.sent_count,
+      conversation.received_count,
+      conversation.last_active,
     ));
+    conversationsUpserted += 1;
+  }
+
+  for (const [conversationKey, stored] of storedConversations) {
+    if (incomingConversations.has(conversationKey)) continue;
+    if (
+      Number(stored.message_count || 0) === 0
+      && Number(stored.sent_count || 0) === 0
+      && Number(stored.received_count || 0) === 0
+    ) continue;
+
+    conversationStatements.push(env.DB.prepare(`
+      UPDATE message_conversations
+      SET message_count = 0,
+          sent_count = 0,
+          received_count = 0,
+          updated_at = datetime('now')
+      WHERE conversation_key = ?
+    `).bind(conversationKey));
+    conversationsCleared += 1;
   }
   await runBatches(env, conversationStatements);
 
-  const storedRows = await env.DB.prepare(`
-    SELECT conversation_key
-    FROM message_conversations
+  const storedMessageRows = await env.DB.prepare(`
+    SELECT source_id, conversation_key, timestamp, direction, chat_type, body
+    FROM message_items
   `).all();
-  const storedConversationKeys = new Set(storedRows.results.map((row) => row.conversation_key));
+  const storedMessages = new Map(
+    storedMessageRows.results.map((row) => [String(row.source_id), row]),
+  );
 
-  const messageStatements = [];
+  const incomingMessages = new Map();
   for (const item of recentMessages) {
     const conversationKey = keyForConversation(item);
-    if (!conversationKeys.has(conversationKey) || !storedConversationKeys.has(conversationKey)) continue;
+    if (!incomingConversations.has(conversationKey)) continue;
+    const sourceId = String(item.id);
+    incomingMessages.set(sourceId, {
+      source_id: sourceId,
+      conversation_key: conversationKey,
+      timestamp: item.timestamp || null,
+      direction: item.direction || null,
+      chat_type: item.chat_type || null,
+      body: item.preview || '',
+    });
+  }
+
+  const messageStatements = [];
+  let messagesUpserted = 0;
+  for (const [sourceId, item] of incomingMessages) {
+    const stored = storedMessages.get(sourceId);
+    if (stored && messageRowsEqual(stored, item)) continue;
 
     messageStatements.push(env.DB.prepare(`
       INSERT INTO message_items (
@@ -1787,22 +1849,60 @@ async function ingestMessages(env, payload) {
         body = excluded.body,
         updated_at = datetime('now')
     `).bind(
-      String(item.id),
-      conversationKey,
-      item.timestamp || null,
-      item.direction || null,
-      item.chat_type || null,
-      item.preview || '',
+      sourceId,
+      item.conversation_key,
+      item.timestamp,
+      item.direction,
+      item.chat_type,
+      item.body,
     ));
+    messagesUpserted += 1;
   }
   await runBatches(env, messageStatements);
+
+  const deleteStatements = [];
+  for (const sourceId of storedMessages.keys()) {
+    if (incomingMessages.has(sourceId)) continue;
+    deleteStatements.push(
+      env.DB.prepare('DELETE FROM message_items WHERE source_id = ?').bind(sourceId),
+    );
+  }
+  await runBatches(env, deleteStatements);
 
   return json({
     ok: true,
     runId,
     conversations: conversations.length,
-    recentMessages: messageStatements.length,
+    recentMessages: incomingMessages.size,
+    changes: {
+      conversationsUpserted,
+      conversationsCleared,
+      messagesUpserted,
+      messagesDeleted: deleteStatements.length,
+    },
   }, 201);
+}
+
+function conversationRowsEqual(stored, incoming) {
+  return stored.display_name === incoming.display_name
+    && nullableTextEqual(stored.handle, incoming.handle)
+    && nullableTextEqual(stored.chat_type, incoming.chat_type)
+    && Number(stored.message_count || 0) === incoming.message_count
+    && Number(stored.sent_count || 0) === incoming.sent_count
+    && Number(stored.received_count || 0) === incoming.received_count
+    && nullableTextEqual(stored.last_active, incoming.last_active);
+}
+
+function messageRowsEqual(stored, incoming) {
+  return stored.conversation_key === incoming.conversation_key
+    && nullableTextEqual(stored.timestamp, incoming.timestamp)
+    && nullableTextEqual(stored.direction, incoming.direction)
+    && nullableTextEqual(stored.chat_type, incoming.chat_type)
+    && String(stored.body || '') === incoming.body;
+}
+
+function nullableTextEqual(left, right) {
+  return (left == null ? null : String(left)) === (right == null ? null : String(right));
 }
 
 async function runBatches(env, statements, size = 100) {
