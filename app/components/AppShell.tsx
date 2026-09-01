@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenText, MessageSquareText, Palette, Sparkles, Wrench } from "lucide-react";
+import { Binoculars, BookMarked, BookOpenText, MessageSquareText, Palette, Sparkles, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -8,6 +8,8 @@ import type { ReactNode } from "react";
 const navItems = [
   { href: "/", label: "Messages", mobileLabel: "Messages", Icon: MessageSquareText },
   { href: "/memory", label: "Memory", mobileLabel: "Memory", Icon: BookOpenText },
+  { href: "/sources", label: "Sources", mobileLabel: "Sources", Icon: BookMarked },
+  { href: "/future", label: "Future", mobileLabel: "Future", Icon: Binoculars },
   { href: "/mantra", label: "Mantra", mobileLabel: "Mantra", Icon: Sparkles },
   { href: "/style", label: "Style", mobileLabel: "Style", Icon: Palette },
   { href: "/tools", label: "Tools & Skills", mobileLabel: "Tools", Icon: Wrench },
@@ -27,7 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Eidos
           </h1>
         </div>
-        <nav className="mt-3 grid grid-cols-5 gap-2 md:mt-5 md:grid-cols-1 md:gap-1">
+        <nav className="mt-3 grid grid-cols-7 gap-1.5 md:mt-5 md:grid-cols-1 md:gap-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.Icon;

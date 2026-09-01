@@ -22,3 +22,23 @@ Deferred:
 - email integration
 - automatic profile routing
 - old-note migration beyond read-only archive/search
+
+## Deployment workflow
+
+GitHub is the source of truth for Eidos. The canonical repository is
+[`eastmountaincode/eidos`](https://github.com/eastmountaincode/eidos), and Vercel
+is linked to its `main` branch.
+
+1. Make and test changes in this repository.
+2. Commit every production file and push the commit to GitHub.
+3. Let Vercel create the production deployment from that Git commit.
+4. Verify the custom domain is serving the same commit.
+
+Do not run a direct Vercel production deployment from a local checkout. In
+particular, never deploy a dirty working tree: it creates an artifact that
+cannot be reconstructed from GitHub.
+
+The Cloudflare Worker in `apps/api` is deployed separately, but it must be
+tested and deployed from the same clean Git commit as the portal that consumes
+it. Run its tests before deployment and verify both catalog endpoints and the
+incremental Messages ingest afterward.

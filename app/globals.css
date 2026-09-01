@@ -46,3 +46,13 @@ button:disabled,
 select:disabled {
   cursor: not-allowed;
 }
+
+@keyframes style-sine-wave {
+  0%, 100% { transform: translateY(-3px); }
+  50% { transform: translateY(3px); }
+}
+
+.style-sine-character {
+  animation: style-sine-wave 2.8s ease-in-out infinite;
+  animation-delay: calc(var(--sine-index) * -55ms);
+}

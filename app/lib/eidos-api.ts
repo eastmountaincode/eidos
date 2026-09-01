@@ -3,6 +3,8 @@ import type { MantraResponse } from "@/types/mantra";
 import type { MemoryResponse } from "@/types/memory";
 import type { ConversationDetail, MessageIngestRequest, MessageViewSummary, MessagesOverview, SummaryWindow } from "@/types/messages";
 import type { StyleEntry, StylesResponse } from "@/types/styles";
+import type { SourceEntry, SourcesResponse } from "@/types/sources";
+import type { FutureEvent, FutureEventsResponse } from "@/types/future";
 
 function workerBaseUrl() {
   const workerUrl = process.env.EIDOS_WORKER_URL;
@@ -59,6 +61,29 @@ export function getStyles(kind?: string) {
 
 export function saveStyle(entry: Partial<StyleEntry> & Pick<StyleEntry, "source_text">) {
   return workerFetch<{ entry: StyleEntry }>("/api/styles", {
+    method: "POST",
+    body: JSON.stringify(entry),
+  });
+}
+
+export function getSources(type?: string) {
+  const query = type ? `?${new URLSearchParams({ type })}` : "";
+  return workerFetch<SourcesResponse>(`/api/sources${query}`);
+}
+
+export function saveSource(entry: Partial<SourceEntry> & Pick<SourceEntry, "source_text">) {
+  return workerFetch<{ entry: SourceEntry }>("/api/sources", {
+    method: "POST",
+    body: JSON.stringify(entry),
+  });
+}
+
+export function getFutureEvents() {
+  return workerFetch<FutureEventsResponse>("/api/future-events");
+}
+
+export function saveFutureEvent(entry: Partial<FutureEvent> & Pick<FutureEvent, "name">) {
+  return workerFetch<{ entry: FutureEvent }>("/api/future-events", {
     method: "POST",
     body: JSON.stringify(entry),
   });

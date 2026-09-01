@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { isPortalAuthed } from "@/lib/auth";
 import { getStyles } from "@/lib/eidos-api";
+import { StylePreview } from "./StylePreview";
 
 export default async function StylePage() {
   if (!(await isPortalAuthed())) redirect("/login");
@@ -36,39 +37,4 @@ export default async function StylePage() {
       </div>
     </AppShell>
   );
-}
-
-function StylePreview({ entry }: { entry: Awaited<ReturnType<typeof getStyles>>["entries"][number] }) {
-  const tags = new Set(entry.tags.map((tag) => tag.toLowerCase()));
-  const isDisplacementText = entry.kind === "text-effect" && tags.has("displacement");
-  const imageUrl = entry.preview_url || (entry.kind === "image" && /\.(avif|gif|jpe?g|png|webp)(\?.*)?$/i.test(entry.url || "") ? entry.url : null);
-
-  if (isDisplacementText) {
-    const filterId = `style-displacement-${entry.id.replace(/[^a-z0-9_-]/gi, "-")}`;
-    return (
-      <div className="relative mb-3 grid min-h-32 place-items-center overflow-hidden rounded-md border border-border bg-[#eeeae1] px-4">
-        <svg aria-hidden="true" className="absolute size-0">
-          <filter id={filterId}>
-            <feTurbulence baseFrequency="0.012 0.045" numOctaves="2" seed="7" type="fractalNoise" />
-            <feDisplacementMap in="SourceGraphic" scale="7" xChannelSelector="R" yChannelSelector="B" />
-          </filter>
-        </svg>
-        <span className="text-center text-[28px] font-bold tracking-tight text-[#292822]" style={{ filter: `url(#${filterId})` }}>
-          Selectable, distorted text
-        </span>
-      </div>
-    );
-  }
-
-  if (imageUrl) {
-    return (
-      <div className="mb-3 overflow-hidden rounded-md border border-border bg-bg">
-        {/* Direct URLs are intentional: Style previews may come from arbitrary reference sites. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img alt={`Preview of ${entry.source_text}`} className="h-44 w-full object-cover" loading="lazy" src={imageUrl} />
-      </div>
-    );
-  }
-
-  return null;
 }

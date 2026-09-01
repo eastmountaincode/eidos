@@ -1,5 +1,6 @@
 {
   "name": "eidos-api",
+  "account_id": "073abd4ee247f9cf77d6a08d9fa12f12",
   "main": "src/index.js",
   "compatibility_date": "2026-06-01",
   "d1_databases": [

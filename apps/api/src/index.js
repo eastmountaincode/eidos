@@ -115,6 +115,32 @@ export default {
       return upsertStyleEntry(env, decodeURIComponent(styleMatch[1]), await request.json());
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/sources') {
+      return getSourceEntries(env, url);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/sources') {
+      return upsertSourceEntry(env, null, await request.json());
+    }
+
+    const sourceMatch = url.pathname.match(/^\/api\/sources\/([^/]+)$/);
+    if (request.method === 'POST' && sourceMatch) {
+      return upsertSourceEntry(env, decodeURIComponent(sourceMatch[1]), await request.json());
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/future-events') {
+      return getFutureEvents(env);
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/future-events') {
+      return upsertFutureEvent(env, null, await request.json());
+    }
+
+    const futureEventMatch = url.pathname.match(/^\/api\/future-events\/([^/]+)$/);
+    if (request.method === 'POST' && futureEventMatch) {
+      return upsertFutureEvent(env, decodeURIComponent(futureEventMatch[1]), await request.json());
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/mantra') {
       return getMantra(env);
     }
@@ -327,6 +353,99 @@ async function upsertStyleEntry(env, id, payload) {
   `).bind(entry.id, entry.source_text, entry.kind, entry.url, entry.preview_url, entry.captured_at, entry.context, entry.notes, entry.tags_json, entry.file_path).run();
 
   return json({ entry: normalizeStyleEntry(await env.DB.prepare('SELECT * FROM style_entries WHERE id = ?').bind(entry.id).first()) }, 201);
+}
+
+async function getSourceEntries(env, url) {
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
+  const type = String(url.searchParams.get('type') || '').trim();
+  const entries = type
+    ? await env.DB.prepare('SELECT * FROM source_entries WHERE type = ? ORDER BY added_at DESC LIMIT ?').bind(type, limit).all()
+    : await env.DB.prepare('SELECT * FROM source_entries ORDER BY added_at DESC LIMIT ?').bind(limit).all();
+  return json({ entries: entries.results.map(normalizeSourceEntry) });
+}
+
+function normalizeSourceEntry(entry) {
+  return entry ? { ...entry, tags: parseJson(entry.tags_json, []) } : null;
+}
+
+async function upsertSourceEntry(env, id, payload) {
+  const requestedId = String(id || payload.id || '').trim();
+  const existing = requestedId ? await env.DB.prepare('SELECT * FROM source_entries WHERE id = ?').bind(requestedId).first() : null;
+  const sourceText = String(payload.source_text || payload.sourceText || existing?.source_text || '').trim();
+  if (!sourceText) return json({ error: 'missing source_text' }, 400);
+
+  const entry = {
+    id: requestedId || styleSlug(sourceText) || crypto.randomUUID(),
+    source_text: sourceText,
+    type: payload.type ? String(payload.type).trim() : existing?.type || null,
+    context: payload.context ? String(payload.context).trim() : existing?.context || null,
+    creator: payload.creator ? String(payload.creator).trim() : existing?.creator || null,
+    year: payload.year ? String(payload.year).trim() : existing?.year || null,
+    url: payload.url ? String(payload.url).trim() : existing?.url || null,
+    file_path: payload.file_path ? String(payload.file_path).trim() : existing?.file_path || null,
+    preview_url: payload.preview_url ? String(payload.preview_url).trim() : existing?.preview_url || null,
+    tags_json: JSON.stringify(normalizeStyleTags(payload.tags ?? payload.tags_json ?? existing?.tags_json)),
+  };
+
+  await env.DB.prepare(`
+    INSERT INTO source_entries (id, source_text, type, context, creator, year, url, file_path, preview_url, tags_json, added_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET source_text = excluded.source_text, type = excluded.type, context = excluded.context,
+      creator = excluded.creator, year = excluded.year, url = excluded.url, file_path = excluded.file_path,
+      preview_url = excluded.preview_url, tags_json = excluded.tags_json, updated_at = datetime('now')
+  `).bind(entry.id, entry.source_text, entry.type, entry.context, entry.creator, entry.year, entry.url, entry.file_path, entry.preview_url, entry.tags_json).run();
+
+  return json({ entry: normalizeSourceEntry(await env.DB.prepare('SELECT * FROM source_entries WHERE id = ?').bind(entry.id).first()) }, 201);
+}
+
+async function getFutureEvents(env) {
+  const entries = await env.DB.prepare(`
+    SELECT * FROM future_events
+    WHERE status != 'archived'
+    ORDER BY CASE WHEN next_start IS NULL THEN 1 ELSE 0 END, next_start ASC, watch_month ASC, name ASC
+  `).all();
+  return json({ entries: entries.results.map(normalizeFutureEvent) });
+}
+
+function normalizeFutureEvent(entry) {
+  return entry ? { ...entry, tags: parseJson(entry.tags_json, []) } : null;
+}
+
+async function upsertFutureEvent(env, id, payload) {
+  const requestedId = String(id || payload.id || '').trim();
+  const existing = requestedId ? await env.DB.prepare('SELECT * FROM future_events WHERE id = ?').bind(requestedId).first() : null;
+  const name = String(payload.name || existing?.name || '').trim();
+  if (!name) return json({ error: 'missing name' }, 400);
+
+  const text = (value, fallback = null) => value === undefined ? fallback : (String(value).trim() || null);
+  const entry = {
+    id: requestedId || styleSlug(name) || crypto.randomUUID(),
+    name,
+    url: text(payload.url, existing?.url),
+    description: text(payload.description, existing?.description),
+    location: text(payload.location, existing?.location),
+    cadence: text(payload.cadence, existing?.cadence || 'annual') || 'annual',
+    last_start: text(payload.last_start, existing?.last_start),
+    last_end: text(payload.last_end, existing?.last_end),
+    next_start: text(payload.next_start, existing?.next_start),
+    next_end: text(payload.next_end, existing?.next_end),
+    watch_month: payload.watch_month === undefined ? existing?.watch_month ?? null : Math.min(Math.max(Number(payload.watch_month), 1), 12),
+    status: text(payload.status, existing?.status || 'watching') || 'watching',
+    notes: text(payload.notes, existing?.notes),
+    tags_json: JSON.stringify(normalizeStyleTags(payload.tags ?? payload.tags_json ?? existing?.tags_json)),
+  };
+
+  await env.DB.prepare(`
+    INSERT INTO future_events (id, name, url, description, location, cadence, last_start, last_end, next_start, next_end, watch_month, status, notes, tags_json, added_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, url = excluded.url, description = excluded.description,
+      location = excluded.location, cadence = excluded.cadence, last_start = excluded.last_start, last_end = excluded.last_end,
+      next_start = excluded.next_start, next_end = excluded.next_end, watch_month = excluded.watch_month,
+      status = excluded.status, notes = excluded.notes, tags_json = excluded.tags_json, updated_at = datetime('now')
+  `).bind(entry.id, entry.name, entry.url, entry.description, entry.location, entry.cadence, entry.last_start, entry.last_end,
+    entry.next_start, entry.next_end, entry.watch_month, entry.status, entry.notes, entry.tags_json).run();
+
+  return json({ entry: normalizeFutureEvent(await env.DB.prepare('SELECT * FROM future_events WHERE id = ?').bind(entry.id).first()) }, 201);
 }
 
 async function getMantra(env) {

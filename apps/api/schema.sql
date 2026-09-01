@@ -134,6 +134,45 @@ CREATE TABLE IF NOT EXISTS style_entries (
 CREATE INDEX IF NOT EXISTS idx_style_entries_kind ON style_entries(kind, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_style_entries_updated ON style_entries(updated_at DESC);
 
+CREATE TABLE IF NOT EXISTS source_entries (
+  id TEXT PRIMARY KEY,
+  source_text TEXT NOT NULL,
+  type TEXT,
+  context TEXT,
+  creator TEXT,
+  year TEXT,
+  url TEXT,
+  file_path TEXT,
+  preview_url TEXT,
+  tags_json TEXT,
+  added_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_source_entries_added ON source_entries(added_at DESC);
+CREATE INDEX IF NOT EXISTS idx_source_entries_type ON source_entries(type, added_at DESC);
+
+CREATE TABLE IF NOT EXISTS future_events (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  url TEXT,
+  description TEXT,
+  location TEXT,
+  cadence TEXT NOT NULL DEFAULT 'annual',
+  last_start TEXT,
+  last_end TEXT,
+  next_start TEXT,
+  next_end TEXT,
+  watch_month INTEGER,
+  status TEXT NOT NULL DEFAULT 'watching',
+  notes TEXT,
+  tags_json TEXT,
+  added_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_future_events_status ON future_events(status, next_start, watch_month);
+
 CREATE TABLE IF NOT EXISTS invoice_clients (
   client_key TEXT PRIMARY KEY,
   client_name TEXT NOT NULL,
