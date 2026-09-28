@@ -3,11 +3,9 @@
 import { ArrowUp, Plus } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
-type Profile = "personal" | "creative" | "bioinformatics";
 type Message = { id: string; text: string };
 
 export function ChatInterface() {
-  const [profile, setProfile] = useState<Profile>("personal");
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -44,23 +42,11 @@ export function ChatInterface() {
     <section aria-label="Chat" className="flex h-full min-h-0 flex-col">
       <header className="flex h-[68px] shrink-0 items-center justify-between gap-3 border-b border-[#eceae3] bg-white/65 px-4 sm:px-7">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5b6f60]">Chat</p>
           <h1 className="truncate text-[16px] font-semibold text-[#193129] sm:text-[17px]">
             {messages.length ? messages[0].text : "New conversation"}
           </h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <label className="sr-only" htmlFor="eidos-profile">Profile</label>
-          <select
-            className="h-9 max-w-[140px] rounded-xl border border-[#e6e8e1] bg-white px-3 text-[12px] font-medium text-[#364e40] outline-none focus-visible:ring-2 focus-visible:ring-[#93ac98] sm:text-[13px]"
-            id="eidos-profile"
-            onChange={(event) => setProfile(event.target.value as Profile)}
-            value={profile}
-          >
-            <option value="personal">Personal</option>
-            <option value="creative">Creative</option>
-            <option value="bioinformatics">Bioinformatics</option>
-          </select>
           <button
             aria-label="New conversation"
             className="flex h-9 items-center gap-1.5 rounded-xl border border-[#e6e8e1] bg-white px-2.5 text-[12px] font-medium text-[#364e40] transition hover:border-[#c7d3c8] hover:bg-[#f7f9f6] sm:px-3 sm:text-[13px]"

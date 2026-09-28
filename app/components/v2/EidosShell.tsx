@@ -1,12 +1,15 @@
 "use client";
 
-import { Menu, MessageCircle, X } from "lucide-react";
+import { Menu, MessageCircle, MessagesSquare, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 // New sections can join this navigation as their pages are built.
-const sections = [{ href: "/", label: "Chat", Icon: MessageCircle }];
+const sections = [
+  { href: "/", label: "Chat", Icon: MessageCircle },
+  { href: "/messages", label: "Messages", Icon: MessagesSquare },
+];
 
 export function EidosShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -28,8 +31,7 @@ export function EidosShell({ children }: { children: ReactNode }) {
         </button>
       </div>
 
-      <nav aria-label="Main navigation" className="px-3 pt-5">
-        <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#596b5e]">Workspace</p>
+      <nav aria-label="Main navigation" className="border-t border-[#e4e5dd] px-3 pt-4">
         <div className="grid gap-1">
           {sections.map(({ href, label, Icon }) => {
             const active = pathname === href;
