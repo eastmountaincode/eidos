@@ -6,6 +6,10 @@ It replaces the old Clawd/OpenClaw-shaped setup with a profile-aware agent, a ne
 
 Durable state should live in Cloudflare D1/R2. Local JSON is only for temporary bootstrap exports or adapter boundaries.
 
+The replacement portal's Chat connects through a durable Cloudflare queue to
+the Mac mini agent. See [web conversation setup](docs/web-chat.md) for the
+service, delivery guarantees and deployment steps.
+
 First build target:
 
 - profile switching: personal, creative, bioinformatics

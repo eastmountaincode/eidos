@@ -21,7 +21,7 @@ function readIfExists(path: string): string {
   return readFileSync(path, 'utf-8').trim();
 }
 
-export async function buildPrompt(userText: string, profile: ProfileName): Promise<string> {
+export async function buildPrompt(userText: string, profile: ProfileName, channel: 'telegram' | 'web' = 'telegram'): Promise<string> {
   const root = config.workspacePath;
   const identity = readIfExists(resolve(root, 'shared/IDENTITY.md'));
   const profileIndex = readIfExists(resolve(root, 'shared/PROFILE_INDEX.md'));
@@ -77,6 +77,11 @@ export async function buildPrompt(userText: string, profile: ProfileName): Promi
     '- Apple Music playlists: use `python3 ~/.eidos/services/music/apple_music_playlist.py --playlist "PLAYLIST" --song "TITLE|ARTIST"` to create playlists and add Apple Music catalog tracks through the dedicated signed-in Eidos Chrome/MusicKit profile. Use `--search "QUERY"` to check catalog matches. For images, extract song titles/artists first, then call this tool.',
     '- Capability registry: use `python3 ~/.eidos/services/skills/update_capability.py --id "CAPABILITY_ID"` to touch the portal Updated timestamp. Include `--notes`, `--summary`, `--status`, or other fields when the behavior or tested state changed.',
     '',
+    '## Current Conversation',
+    channel === 'web'
+      ? 'Andrew is talking to you in the Eidos web app. Reply directly here. Do not send this reply through Telegram. For memory provenance use "Eidos app conversation". Local file paths are not downloadable in this interface; do not claim to have attached a file.'
+      : 'Andrew is talking to you through Telegram.',
+    '',
     '## User Message',
     userText,
   ].join('\n');
@@ -91,6 +96,7 @@ async function readPersistentMemory(profile: ProfileName): Promise<string> {
   url.searchParams.set('limit', '5');
 
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(20000),
     headers: {
       Authorization: `Bearer ${config.memory.apiToken}`,
       'User-Agent': 'Eidos/0.1',

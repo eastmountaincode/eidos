@@ -1,3 +1,5 @@
+import { handleAgentChat } from './agent-chat.mjs';
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -31,10 +33,19 @@ export class MessageJobWake {
     this.state = state;
     this.env = env;
     this.waiters = new Set();
+    this.lastSeen = 0;
   }
 
   async fetch(request) {
     const url = new URL(request.url);
+
+    if (request.method === 'POST' && url.pathname === '/heartbeat') {
+      this.lastSeen = Date.now();
+      return json({ online: true });
+    }
+    if (request.method === 'GET' && url.pathname === '/status') {
+      return json({ online: Date.now() - this.lastSeen < 90000 });
+    }
 
     if (request.method === 'GET' && url.pathname === '/wait') {
       return this.wait(url);
@@ -93,6 +104,9 @@ export default {
     if (!requireAuth(request, env)) {
       return unauthorized();
     }
+
+    const chatResponse = await handleAgentChat(request, env);
+    if (chatResponse) return chatResponse;
 
     if (request.method === 'GET' && url.pathname === '/api/messages/overview') {
       return getMessagesOverview(env, url);

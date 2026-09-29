@@ -1,109 +1,120 @@
 "use client";
 
-import { ArrowUp, Plus } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-
-type Message = { id: string; text: string };
+import { ArrowUp, LoaderCircle, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useChatConversation } from './useChatConversation';
 
 export function ChatInterface() {
-  const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [draft, setDraft] = useState('');
+  const chat = useChatConversation();
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true);
+  const active = chat.turns.find((turn) => turn.status === 'queued' || turn.status === 'running');
+  const last = chat.turns.at(-1);
+  const pending = chat.pending && !chat.turns.some((turn) => turn.id === chat.pending?.id) ? chat.pending : null;
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages]);
+    if (nearBottom.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [last?.id, last?.response, last?.status, pending?.id, chat.loaded]);
 
-  function send(event?: FormEvent<HTMLFormElement>) {
+  async function send(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const text = draft.trim();
-    if (!text) return;
-
-    setMessages((current) => [...current, { id: crypto.randomUUID(), text }]);
-    setDraft("");
+    if (!text || active || chat.sending || pending || !chat.loaded) return;
+    nearBottom.current = true;
+    setDraft('');
+    await chat.send(text);
     inputRef.current?.focus();
   }
 
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
-      send();
+      void send();
     }
   }
 
-  function newChat() {
-    setMessages([]);
-    setDraft("");
-    inputRef.current?.focus();
+  async function loadOlder() {
+    const container = scrollRef.current;
+    const height = container?.scrollHeight || 0;
+    const top = container?.scrollTop || 0;
+    nearBottom.current = false;
+    await chat.loadOlder();
+    requestAnimationFrame(() => {
+      if (container) container.scrollTop = top + container.scrollHeight - height;
+    });
   }
 
   return (
     <section aria-label="Chat" className="flex h-full min-h-0 flex-col">
       <header className="flex h-[68px] shrink-0 items-center justify-between gap-3 border-b border-[#eceae3] bg-white/65 px-4 sm:px-7">
-        <div className="min-w-0">
-          <h1 className="truncate text-[16px] font-semibold text-[#193129] sm:text-[17px]">
-            {messages.length ? messages[0].text : "New conversation"}
-          </h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            aria-label="New conversation"
-            className="flex h-9 items-center gap-1.5 rounded-xl border border-[#e6e8e1] bg-white px-2.5 text-[12px] font-medium text-[#364e40] transition hover:border-[#c7d3c8] hover:bg-[#f7f9f6] sm:px-3 sm:text-[13px]"
-            onClick={newChat}
-            type="button"
-          >
-            <Plus aria-hidden="true" className="size-4" strokeWidth={1.8} />
-            <span className="hidden sm:inline">New chat</span>
-          </button>
-        </div>
+        <h1 className="text-[16px] font-semibold text-[#193129] sm:text-[17px]">Conversation</h1>
+        {chat.loaded && !chat.online ? <span className="text-[12px] text-[#7b827b]">Agent offline</span> : null}
       </header>
 
-      <div className="eidos-v2-scroll min-h-0 flex-1 overflow-y-auto px-4 sm:px-8" role="log" aria-label="Conversation" aria-live="polite">
-        {messages.length ? (
+      <div className="eidos-v2-scroll min-h-0 flex-1 overflow-y-auto px-4 sm:px-8" ref={scrollRef}
+        onScroll={() => {
+          const element = scrollRef.current;
+          if (element) nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
+        }} role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text">
+        {chat.turns.length || pending ? (
           <div className="mx-auto w-full max-w-[800px] py-8 sm:py-10">
-            <ol className="flex flex-col gap-5">
-              {messages.map((message) => (
-                <li className="flex justify-end" key={message.id}>
-                  <div className="max-w-[min(85%,620px)] whitespace-pre-wrap break-words rounded-[22px] rounded-br-[7px] bg-[#214335] px-4 py-3 text-[14px] leading-[1.6] text-white shadow-[0_2px_10px_rgba(23,53,39,0.08)] sm:px-5 sm:text-[15px]">
-                    {message.text}
-                  </div>
+            {chat.hasOlder ? <button className="mx-auto mb-7 block text-[13px] text-[#637069] hover:text-[#19382e] disabled:opacity-50" disabled={chat.loadingOlder} onClick={() => void loadOlder()} type="button">
+              {chat.loadingOlder ? 'Loading…' : 'Earlier messages'}
+            </button> : null}
+            <ol className="flex flex-col gap-7">
+              {chat.turns.map((turn) => (
+                <li className="space-y-5" id={`turn-${turn.id}`} key={turn.id}>
+                  <div className="flex justify-end"><div className="max-w-[min(85%,620px)] whitespace-pre-wrap break-words rounded-[22px] rounded-br-[7px] bg-[#214335] px-4 py-3 text-[14px] leading-[1.6] text-white sm:px-5 sm:text-[15px]">
+                    <span className="sr-only">You: </span>{turn.prompt}
+                  </div></div>
+                  {turn.response ? <div className="max-w-[720px] whitespace-pre-wrap break-words px-1 text-[14px] leading-[1.75] text-[#213d2c] sm:text-[15px]">
+                    <span className="sr-only">Eidos: </span>{turn.response}
+                  </div> : null}
+                  {turn.status === 'queued' || turn.status === 'running' ? <div className="flex items-center gap-2 px-1 text-[13px] text-[#708075]" role="status">
+                    <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" />
+                    {turn.status === 'running' ? 'Thinking…' : chat.online ? 'Sending to Eidos…' : 'Waiting for Eidos to reconnect…'}
+                  </div> : null}
+                  {turn.status === 'failed' ? <div className="space-y-2 px-1 text-[13px] text-[#9a4a32]">
+                    <p>{turn.error || 'Eidos could not finish this reply.'}</p>
+                    {turn.id === last?.id ? <button className="inline-flex items-center gap-1.5 text-[#526958] hover:text-[#19382e] disabled:opacity-40" disabled={Boolean(active) || chat.sending || Boolean(pending)} onClick={() => void chat.send(turn.prompt, turn)} type="button">
+                      <RotateCcw aria-hidden="true" className="size-3.5" />Try again
+                    </button> : null}
+                  </div> : null}
                 </li>
               ))}
+              {pending ? <li className="space-y-2">
+                <div className="flex justify-end"><div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[22px] rounded-br-[7px] bg-[#214335] px-4 py-3 text-[15px] leading-relaxed text-white">{pending.prompt}</div></div>
+                <div className="text-right text-[12px] text-[#708075]">
+                  {chat.sending ? 'Sending…' : <button type="button" onClick={() => void chat.send(pending.prompt)}>Confirm delivery</button>}
+                </div>
+              </li> : null}
             </ol>
             <div ref={bottomRef} />
           </div>
         ) : (
           <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-5 pb-10">
-            <div aria-hidden="true" className="eidos-v2-wordmark grid size-[72px] place-items-center rounded-[24px] border border-[#dbe5d9] bg-[#edf2e9] text-[52px] leading-none text-[#255341] shadow-[0_8px_28px_rgba(30,66,47,0.06)]">
-              e
-            </div>
-            <h2 className="eidos-v2-wordmark text-[38px] leading-none tracking-[-0.035em] text-[#254235] sm:text-[42px]">Eidos</h2>
+            {chat.loaded ? <>
+              <div aria-hidden="true" className="eidos-v2-wordmark grid size-[72px] place-items-center rounded-[24px] border border-[#dbe5d9] bg-[#edf2e9] text-[52px] leading-none text-[#255341] shadow-[0_8px_28px_rgba(30,66,47,0.06)]">e</div>
+              <h2 className="eidos-v2-wordmark text-[38px] leading-none tracking-[-0.035em] text-[#254235] sm:text-[42px]">Eidos</h2>
+            </> : <LoaderCircle aria-label="Loading conversation" className="size-5 animate-spin text-[#708075] motion-reduce:animate-none" />}
           </div>
         )}
       </div>
 
       <div className="eidos-v2-composer shrink-0 bg-[#faf9f6] px-3 pt-2 sm:px-7">
-        <form className="mx-auto w-full max-w-[800px]" onSubmit={send}>
-          <div className="rounded-[22px] border border-[#dadfd6] bg-white p-2 shadow-[0_8px_32px_rgba(36,58,41,0.075)] focus-within:border-[#a8bbab] focus-within:shadow-[0_8px_32px_rgba(36,58,41,0.09)] sm:p-3">
+        {chat.error ? <p className="mx-auto mb-3 max-w-[800px] px-2 text-[13px] text-[#9a4a32]" role="alert">{chat.error}</p> : null}
+        <form className="mx-auto w-full max-w-[800px]" onSubmit={(event) => void send(event)}>
+          <div className="rounded-[22px] border border-[#dadfd6] bg-white p-2 shadow-[0_8px_32px_rgba(36,58,41,0.075)] focus-within:border-[#a8bbab] sm:p-3">
             <label className="sr-only" htmlFor="eidos-message">Message Eidos</label>
-            <textarea
-              className="eidos-v2-textarea block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 pt-2 text-[15px] leading-relaxed text-[#1b3427] outline-none placeholder:text-[#98a29a] sm:px-3"
-              id="eidos-message"
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={onComposerKeyDown}
-              placeholder="Message Eidos"
-              ref={inputRef}
-              rows={2}
-              value={draft}
-            />
+            <textarea className="eidos-v2-textarea block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 pt-2 text-[15px] leading-relaxed text-[#1b3427] outline-none placeholder:text-[#98a29a] sm:px-3"
+              id="eidos-message" maxLength={20000} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown}
+              placeholder="Message Eidos" ref={inputRef} rows={2} value={draft} />
             <div className="flex items-center justify-end px-1 pb-1 sm:px-2">
-              <button
-                aria-label="Send message"
-                className="grid size-9 place-items-center rounded-xl bg-[#214335] text-white transition hover:bg-[#315b46] disabled:bg-[#e8ece6] disabled:text-[#a2ada4]"
-                disabled={!draft.trim()}
-                type="submit"
-              >
+              <button aria-label="Send message" className="grid size-9 place-items-center rounded-xl bg-[#214335] text-white transition hover:bg-[#315b46] disabled:bg-[#e8ece6] disabled:text-[#a2ada4]"
+                disabled={!draft.trim() || !chat.loaded || Boolean(active) || chat.sending || Boolean(pending)} type="submit">
                 <ArrowUp aria-hidden="true" className="size-[18px]" strokeWidth={2} />
               </button>
             </div>
