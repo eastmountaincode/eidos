@@ -7,6 +7,8 @@ export type ChatTurn = {
   status: 'queued' | 'running' | 'completed' | 'failed';
   revision: number;
   error: string | null;
+  model: string | null;
+  settings_json: string | null;
   created_at: string;
   updated_at: string;
 };

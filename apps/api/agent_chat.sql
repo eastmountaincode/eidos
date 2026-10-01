@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS agent_chat_turns (
   session_id TEXT,
   claim_token TEXT,
   model TEXT,
+  settings_json TEXT,
   usage_json TEXT,
   prior_attempts_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

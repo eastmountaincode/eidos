@@ -23,7 +23,7 @@ async function forward(request: Request) {
     if (!parsed || typeof parsed.prompt !== 'string' || parsed.prompt.length > 20000) {
       return Response.json({ error: 'Please enter a message of at most 20,000 characters.' }, { status: 400 });
     }
-    body = JSON.stringify({ id: parsed.id, prompt: parsed.prompt, retry: parsed.retry === true, conversation: 'main' });
+    body = JSON.stringify({ id: parsed.id, prompt: parsed.prompt, settings: parsed.settings, retry: parsed.retry === true, conversation: 'main' });
   }
   try {
     const response = await fetch(url, {

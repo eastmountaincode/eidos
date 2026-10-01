@@ -6,6 +6,7 @@ import { Miniflare } from 'miniflare';
 async function setup(t) {
   const mf = new Miniflare({
     modules: true,
+    modulesRoot: new URL('../../..', import.meta.url).pathname,
     scriptPath: new URL('../src/index.js', import.meta.url).pathname,
     compatibilityDate: '2026-06-01',
     bindings: { EIDOS_API_TOKEN: 'test-token' },
@@ -94,4 +95,48 @@ test('history pages are ordered, bounded, and isolated by conversation', async (
   assert.equal(older.turns[0].prompt, 'Message 0');
   assert.equal(older.has_more, false);
   assert.equal((await request('?after=invalid')).status, 400);
+});
+
+test('model and speed are durable, validated, and immutable across delivery and retry', async (t) => {
+  const { db, request } = await setup(t);
+  const settings = { model: 'gpt-5.6-luna', speed: 'fast' };
+  const message = { id: crypto.randomUUID(), prompt: 'settings check', settings };
+  for (const invalid of [{ ...settings, model: 'unknown' }, { ...settings, speed: 'turbo' },
+    { ...settings, command: '--dangerous' }, 'not an object']) {
+    assert.equal((await request('', { ...message, settings: invalid })).status, 400);
+  }
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM agent_chat_turns').first()).n, 0);
+  const deliveries = await Promise.all([request('', message), request('', message)]);
+  assert.ok(deliveries.every((r) => [200, 202].includes(r.status)));
+  const first = (await (await request('/claim', {})).json()).turn;
+  assert.deepEqual(JSON.parse(first.settings_json), settings);
+  assert.equal((await request('', { ...message, settings: { ...settings, speed: 'standard' } })).status, 409);
+  await request(`/turns/${first.id}`, { claim_token: first.claim_token, status: 'failed', response: 'partial', model: settings.model }, 'PATCH');
+  const history = (await (await request()).json()).turns[0];
+  assert.deepEqual(JSON.parse(history.settings_json), settings);
+  assert.equal(history.model, settings.model);
+  assert.equal((await request('', { ...message, settings: { ...settings, model: 'gpt-5.6-sol' }, retry: true })).status, 409);
+  // A pre-selector client can still retry: omission preserves saved settings.
+  assert.equal((await request('', { id: message.id, prompt: message.prompt, retry: true })).status, 202);
+  const second = (await (await request('/claim', {})).json()).turn;
+  assert.deepEqual(JSON.parse(second.settings_json), settings);
+  await request(`/turns/${second.id}`, { claim_token: second.claim_token, status: 'completed', response: 'done', session_id: 'settings-session' }, 'PATCH');
+  const nextSettings = { model: 'gpt-5.6-sol', speed: 'standard' };
+  await request('', { id: crypto.randomUUID(), prompt: 'continue', settings: nextSettings });
+  const next = (await (await request('/claim', {})).json()).turn;
+  assert.equal(next.resume_session_id, 'settings-session');
+  assert.deepEqual(JSON.parse(next.settings_json), nextSettings);
+});
+
+test('settings migration preserves existing conversation history', async (t) => {
+  const mf = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok") } }', d1Databases: { DB: 'migration-test' } });
+  t.after(() => mf.dispose());
+  const db = await mf.getD1Database('DB');
+  const schema = (await readFile(new URL('../agent_chat.sql', import.meta.url), 'utf8')).replace('  settings_json TEXT,\n', '');
+  for (const sql of schema.split(';').map((s) => s.trim()).filter(Boolean)) await db.prepare(sql).run();
+  await db.prepare("INSERT INTO agent_chat_turns (id, conversation_id, prompt, response, status) VALUES ('old', 'main', 'hello', 'saved reply', 'completed')").run();
+  const migration = await readFile(new URL('../agent_chat_settings.sql', import.meta.url), 'utf8');
+  await db.prepare(migration).run();
+  const row = await db.prepare('SELECT response, settings_json FROM agent_chat_turns WHERE id = ?').bind('old').first();
+  assert.deepEqual(row, { response: 'saved reply', settings_json: null });
 });

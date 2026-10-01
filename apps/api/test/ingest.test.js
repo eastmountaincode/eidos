@@ -124,6 +124,7 @@ async function ingest(mf, payload) {
 test('message ingest writes only the delta after the initial snapshot', async (t) => {
   const mf = new Miniflare({
     modules: true,
+    modulesRoot: new URL('../../..', import.meta.url).pathname,
     scriptPath: new URL('../src/index.js', import.meta.url).pathname,
     compatibilityDate: '2026-06-01',
     bindings: { EIDOS_API_TOKEN: 'test-token' },

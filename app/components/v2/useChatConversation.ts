@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatHistory, ChatTurn } from '@/types/chat';
+import { messageForSend, parsePendingMessage, type PendingMessage } from '@/lib/chat-settings';
+import { defaultChatSettings, parseChatSettings, type ChatSettings } from '../../../shared/chat-settings.mjs';
 
-type PendingMessage = { id: string; prompt: string };
 const pendingKey = 'eidos-chat-pending';
+const settingsKey = 'eidos-chat-settings-v1';
 
 async function chatRequest<T>(path = '', body?: unknown): Promise<T> {
   const response = await fetch(`/api/chat${path}`, {
@@ -39,6 +41,14 @@ export function useChatConversation() {
   const pendingRef = useRef<PendingMessage | null>(null);
   const [hasOlder, setHasOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [settings, setSettings] = useState<ChatSettings>(defaultChatSettings);
+
+  function changeSettings(next: ChatSettings) {
+    const value = parseChatSettings(next);
+    setSettings(value);
+    try { localStorage.setItem(settingsKey, JSON.stringify(value)); }
+    catch { /* Browser preferences must not prevent sending. */ }
+  }
 
   const merge = useCallback((incoming: ChatTurn[]) => {
     const combined = new Map(turnsRef.current.map((turn) => [turn.id, turn]));
@@ -58,8 +68,12 @@ export function useChatConversation() {
 
   useEffect(() => {
     try {
-      const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null');
-      if (saved && typeof saved.id === 'string' && typeof saved.prompt === 'string') {
+      const saved = localStorage.getItem(settingsKey);
+      if (saved) setSettings(parseChatSettings(JSON.parse(saved)));
+    } catch { /* An obsolete preference uses the current default. */ }
+    try {
+      const saved = parsePendingMessage(JSON.parse(sessionStorage.getItem(pendingKey) || 'null'));
+      if (saved) {
         pendingRef.current = saved;
         setPending(saved);
       }
@@ -114,7 +128,7 @@ export function useChatConversation() {
 
   async function send(prompt: string, retryTurn?: ChatTurn) {
     if (sendingRef.current) return false;
-    const message = retryTurn ? { id: retryTurn.id, prompt: retryTurn.prompt } : pendingRef.current || { id: crypto.randomUUID(), prompt };
+    const message = messageForSend(prompt, settings, pendingRef.current, retryTurn);
     sendingRef.current = true;
     setSending(true);
     setError('');
@@ -148,5 +162,5 @@ export function useChatConversation() {
     finally { setLoadingOlder(false); }
   }
 
-  return { turns, loaded, error, online, sending, pending, hasOlder, loadingOlder, send, loadOlder };
+  return { turns, loaded, error, online, sending, pending, hasOlder, loadingOlder, settings, changeSettings, send, loadOlder };
 }

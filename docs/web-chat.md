@@ -12,6 +12,27 @@ conversation IDs so separate conversations can be added later. This web stream
 has its own Codex session; it reads the same persistent memory but does not
 import Telegram's transcript or change Telegram's session.
 
+## Model and speed
+
+The composer offers the Mac mini's verified models and Standard/Fast processing.
+Fast uses more of the existing ChatGPT/Codex allowance; it is not a reasoning-depth
+setting or a new API subscription. Browser preferences are stored locally, while
+each message's choices are saved as `settings_json` in D1 before the agent runs.
+Redelivery and explicit retries retain those original choices. A new message can
+switch models without losing the conversation's Codex session.
+
+`shared/chat-settings.mjs` is the shared allowlist, verified against the Mac mini's
+signed-in model catalog on October 1, 2026. Recheck that catalog before adding or
+retiring models. Do not silently substitute a different model. The runner passes
+the model and service tier on both `exec` and `exec resume`; Standard explicitly
+resets the tier instead of inheriting a previous Fast setting. Existing messages
+without settings and Telegram keep their previous behavior.
+
+Existing deployments must apply `apps/api/agent_chat_settings.sql` once before
+deploying this Worker. New installations use the updated `agent_chat.sql`.
+Install `shared/chat-settings.mjs` and `services/telegram/src/codex-args.ts` with
+the updated runner and web-chat adapter on the Mac mini before exposing selectors.
+
 ## Delivery behavior
 
 - Each send has an ID created before transmission. Repeating delivery of that ID

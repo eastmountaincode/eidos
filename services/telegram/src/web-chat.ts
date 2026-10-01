@@ -3,8 +3,9 @@ import { dirname, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { config } from './config.js';
 import { abortAllQueries, sendMessage } from './codex.js';
+import { parseChatSettings } from '../../../shared/chat-settings.mjs';
 
-type Turn = { id: string; prompt: string; claim_token: string; resume_session_id: string | null };
+type Turn = { id: string; prompt: string; claim_token: string; resume_session_id: string | null; settings_json: string | null };
 type Result = { id: string; payload: Record<string, unknown> };
 const outbox = resolve(config.workspacePath, 'data/sessions/web-chat-outbox.json');
 const shutdown = new AbortController();
@@ -75,12 +76,14 @@ async function processTurn(turn: Turn) {
     }).finally(() => { updating = false; });
   }, 10000);
   try {
+    const settings = turn.settings_json ? parseChatSettings(JSON.parse(turn.settings_json)) : undefined;
     const result = await sendMessage(turn.prompt, {
       profile: 'personal',
       channel: 'web',
       sourceRef: `eidos-chat:${turn.id}`,
       resumeSessionId: turn.resume_session_id || undefined,
       retryTransient: false,
+      settings,
       onPartialText: (text) => { partial = text; },
     });
     clearInterval(heartbeat);
@@ -95,7 +98,7 @@ async function processTurn(turn: Turn) {
       response: result.text || partial,
       error,
       session_id: result.sessionId || undefined,
-      model: config.codex.model || null,
+      model: settings?.model || config.codex.model || null,
       usage: result.usage,
     } });
     if (!stopping) await deliverSavedResult();

@@ -1,4 +1,6 @@
-const publicFields = 'seq, id, conversation_id, prompt, response, status, revision, error, created_at, updated_at';
+import { parseChatSettings } from '../../../shared/chat-settings.mjs';
+
+const publicFields = 'seq, id, conversation_id, prompt, response, status, revision, error, model, settings_json, created_at, updated_at';
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -119,8 +121,15 @@ export async function handleAgentChat(request, env) {
       return json({ error: 'Please enter a message of at most 20,000 characters.' }, 400);
     }
     const existing = await publicTurn(env, body.id);
+    // Old clients omit settings. Redelivery/retry preserves the original choices.
+    let settingsJson = existing?.settings_json ?? null;
+    if (body.settings !== undefined && body.settings !== null) {
+      try { settingsJson = JSON.stringify(parseChatSettings(body.settings)); }
+      catch { return json({ error: 'Choose a supported model and speed.' }, 400); }
+    }
     if (existing) {
-      if (existing.conversation_id !== conversation || existing.prompt !== body.prompt.trim()) {
+      if (existing.conversation_id !== conversation || existing.prompt !== body.prompt.trim()
+        || existing.settings_json !== settingsJson) {
         return json({ error: 'This message ID is already in use.' }, 409);
       }
       // Repeating a request after a connection loss returns the original turn.
@@ -139,12 +148,13 @@ export async function handleAgentChat(request, env) {
           response = '', claim_token = NULL, updated_at = datetime('now') WHERE id = ? AND status = 'failed'`)
           .bind(body.id).run();
       } else {
-        await env.DB.prepare(`INSERT INTO agent_chat_turns (id, conversation_id, prompt, status)
-          VALUES (?, ?, ?, 'queued')`).bind(body.id, conversation, body.prompt.trim()).run();
+        await env.DB.prepare(`INSERT INTO agent_chat_turns (id, conversation_id, prompt, status, settings_json)
+          VALUES (?, ?, ?, 'queued', ?)`).bind(body.id, conversation, body.prompt.trim(), settingsJson).run();
       }
     } catch (error) {
       const duplicate = await publicTurn(env, body.id);
       if (duplicate && duplicate.conversation_id === conversation && duplicate.prompt === body.prompt.trim()
+        && duplicate.settings_json === settingsJson
         && duplicate.status !== 'failed') return json({ turn: duplicate });
       if (String(error).includes('UNIQUE constraint')) {
         return json({ error: 'Eidos is still answering your previous message.' }, 409);

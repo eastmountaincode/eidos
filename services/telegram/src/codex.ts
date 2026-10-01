@@ -1,6 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { config, profiles, type ProfileName } from './config.js';
 import { buildPrompt } from './context.js';
+import { buildCodexArgs } from './codex-args.js';
+import type { ChatSettings } from '../../../shared/chat-settings.mjs';
 
 export type AgentResponse = {
   text: string;
@@ -69,6 +71,7 @@ export async function sendMessage(
     channel?: 'telegram' | 'web';
     sourceRef?: string;
     retryTransient?: boolean;
+    settings?: ChatSettings;
   },
 ): Promise<AgentResponse> {
   const queryKey = `${Date.now()}-${Math.random()}`;
@@ -100,10 +103,11 @@ async function runCodex(
     onPartialText?: StreamCallback;
     channel?: 'telegram' | 'web';
     sourceRef?: string;
+    settings?: ChatSettings;
   },
   queryKey: string,
 ): Promise<AgentResponse> {
-  const args = buildArgs(opts.resumeSessionId);
+  const args = buildCodexArgs({ ...opts, defaultModel: config.codex.model, workspacePath: config.workspacePath });
   const runtimePrompt = await buildPrompt(prompt, opts.profile, opts.channel, opts.sourceRef);
   const resumed = Boolean(opts.resumeSessionId);
   console.log(`[codex] Starting ${resumed ? 'resume' : 'new'} query (${queryKey})`);
@@ -211,24 +215,6 @@ async function runCodex(
   }
 
   return { text: fullText, sessionId, usage };
-}
-
-function buildArgs(resumeSessionId?: string): string[] {
-  const common = [
-    '--json',
-    '--skip-git-repo-check',
-    '--dangerously-bypass-approvals-and-sandbox',
-  ];
-
-  if (config.codex.model) {
-    common.push('--model', config.codex.model);
-  }
-
-  if (resumeSessionId) {
-    return ['exec', 'resume', ...common, resumeSessionId, '-'];
-  }
-
-  return ['exec', ...common, '--cd', config.workspacePath, '-'];
 }
 
 function parseEvent(line: string): CodexJsonEvent | undefined {

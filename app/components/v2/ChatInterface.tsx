@@ -3,6 +3,9 @@
 import { ArrowUp, LoaderCircle, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useChatConversation } from './useChatConversation';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { turnSettings } from '@/lib/chat-settings';
+import { chatModels, chatSpeeds, chatSettingsLabel, type ChatSettings } from '../../../shared/chat-settings.mjs';
 
 export function ChatInterface() {
   const [draft, setDraft] = useState('');
@@ -67,7 +70,7 @@ export function ChatInterface() {
             <ol className="flex flex-col gap-7">
               {chat.turns.map((turn) => (
                 <li className="space-y-5" id={`turn-${turn.id}`} key={turn.id}>
-                  <div className="flex justify-end"><div className="max-w-[min(85%,620px)] whitespace-pre-wrap break-words rounded-md bg-secondary px-4 py-3 text-[14px] leading-[1.6] text-foreground sm:px-5 sm:text-[15px]">
+                  <div className="flex justify-end"><div title={turnSettings(turn) ? chatSettingsLabel(turnSettings(turn)!) : undefined} className="max-w-[min(85%,620px)] whitespace-pre-wrap break-words rounded-md bg-secondary px-4 py-3 text-[14px] leading-[1.6] text-foreground sm:px-5 sm:text-[15px]">
                     <span className="sr-only">You: </span>{turn.prompt}
                   </div></div>
                   {turn.response ? <div className="max-w-[720px] whitespace-pre-wrap break-words px-1 text-[14px] leading-[1.75] text-foreground sm:text-[15px]">
@@ -111,8 +114,18 @@ export function ChatInterface() {
             <textarea className="eidos-v2-textarea block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 pt-2 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground sm:px-3"
               id="eidos-message" maxLength={20000} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown}
               placeholder="Message Eidos" ref={inputRef} rows={2} value={draft} />
-            <div className="flex items-center justify-end px-1 pb-1 sm:px-2">
-              <button aria-label="Send message" className="grid size-9 place-items-center rounded-sm bg-primary text-white transition hover:bg-primary/85 disabled:bg-secondary disabled:text-muted-foreground"
+            <div className="flex flex-wrap items-center gap-1 px-1 pb-1 sm:gap-2 sm:px-2">
+              <NativeSelect aria-label="Model" title="Model" size="sm" className="max-w-[155px] border-transparent pl-2 text-[12px] text-muted-foreground shadow-none hover:bg-secondary hover:text-foreground"
+                value={pending?.settings?.model || chat.settings.model} disabled={!chat.loaded || chat.sending || Boolean(pending)}
+                onChange={(event) => chat.changeSettings({ ...chat.settings, model: event.target.value })}>
+                {chatModels.map((model) => <NativeSelectOption key={model.id} value={model.id}>{model.label}</NativeSelectOption>)}
+              </NativeSelect>
+              <NativeSelect aria-label="Speed" title="Fast mode uses more of your Codex allowance." size="sm" className="max-w-[145px] border-transparent pl-2 text-[12px] text-muted-foreground shadow-none hover:bg-secondary hover:text-foreground"
+                value={pending?.settings?.speed || chat.settings.speed} disabled={!chat.loaded || chat.sending || Boolean(pending)}
+                onChange={(event) => chat.changeSettings({ ...chat.settings, speed: event.target.value as ChatSettings['speed'] })}>
+                {chatSpeeds.map((speed) => <NativeSelectOption key={speed.id} value={speed.id}>{speed.label}</NativeSelectOption>)}
+              </NativeSelect>
+              <button aria-label="Send message" className="ml-auto grid size-9 shrink-0 place-items-center rounded-sm bg-primary text-white transition hover:bg-primary/85 disabled:bg-secondary disabled:text-muted-foreground"
                 disabled={!draft.trim() || !chat.loaded || Boolean(active) || chat.sending || Boolean(pending)} type="submit">
                 <ArrowUp aria-hidden="true" className="size-[18px]" strokeWidth={2} />
               </button>

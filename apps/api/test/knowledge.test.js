@@ -5,7 +5,8 @@ import { Miniflare } from 'miniflare';
 import { sqlStatements } from './sql.js';
 
 async function setup(t) {
-  const mf = new Miniflare({ modules: true, scriptPath: new URL('../src/index.js', import.meta.url).pathname, compatibilityDate: '2026-06-01', bindings: { EIDOS_API_TOKEN: 'test-token' }, d1Databases: { DB: 'knowledge-test' }, durableObjects: { MESSAGE_JOB_WAKE: { className: 'MessageJobWake', useSQLite: true } } });
+  const mf = new Miniflare({ modules: true, modulesRoot: new URL('../../..', import.meta.url).pathname,
+    scriptPath: new URL('../src/index.js', import.meta.url).pathname, compatibilityDate: '2026-06-01', bindings: { EIDOS_API_TOKEN: 'test-token' }, d1Databases: { DB: 'knowledge-test' }, durableObjects: { MESSAGE_JOB_WAKE: { className: 'MessageJobWake', useSQLite: true } } });
   t.after(() => mf.dispose());
   const db = await mf.getD1Database('DB');
   await db.prepare(`CREATE TABLE agent_capabilities (id TEXT PRIMARY KEY, kind TEXT, name TEXT, status TEXT, category TEXT, summary TEXT, invocation TEXT, data_source TEXT, notes TEXT, sort_order INTEGER, updated_at TEXT DEFAULT (datetime('now')))` ).run();
