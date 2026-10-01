@@ -12,7 +12,8 @@ test('attachment originals are hash-checked, cached, and never named by untruste
   const data = Buffer.from('The reference phrase is violet otter.');
   const file = { id: crypto.randomUUID(), name: 'spaces and $shell.txt', type: 'text/plain', size: data.length, sha256: createHash('sha256').update(data).digest('hex') };
   let calls = 0;
-  t.mock.method(globalThis, 'fetch', async () => { calls++; return new Response(data, { headers: { 'Content-Length': String(data.length) } }); });
+  // Native fetch decodes CDN-compressed text; Content-Length can be absent.
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return new Response(data, { headers: { 'Content-Encoding': 'br' } }); });
   const options = { workspacePath: root, workerUrl: 'https://worker.example.com', token: 'test' };
   const first = await prepareAttachments(JSON.stringify([file]), options);
   assert.equal(await readFile(join(root, 'data/inbox/web', file.id, 'original.txt'), 'utf8'), data.toString());

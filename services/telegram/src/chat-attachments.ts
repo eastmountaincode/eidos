@@ -30,7 +30,9 @@ export async function prepareAttachments(json: string | null | undefined, option
         headers: { Authorization: `Bearer ${options.token}` },
         signal: AbortSignal.any([...(options.signal ? [options.signal] : []), AbortSignal.timeout(120000)]),
       });
-      if (!response.ok || Number(response.headers.get('content-length')) !== file.size || !response.body) throw new Error('Could not retrieve the attachment.');
+      // Cloudflare may compress text and omit Content-Length. Check the decoded
+      // stream's byte count and hash below, not the compressed HTTP transfer size.
+      if (!response.ok || !response.body) throw new Error('Could not retrieve the attachment.');
       const data = Buffer.alloc(file.size);
       let offset = 0;
       for await (const chunk of response.body) {
