@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUp, FileText, LoaderCircle, Paperclip, RotateCcw, X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useChatConversation } from './useChatConversation';
 import { ChatModelPicker } from './ChatModelPicker';
 import { turnSettings } from '@/lib/chat-settings';
@@ -9,6 +9,7 @@ import { chatSettingsLabel } from '../../../shared/chat-settings.mjs';
 import { attachmentAccept, fileSize, savedAttachments } from '../../../shared/chat-attachments.mjs';
 import { useChatAttachments } from './useChatAttachments';
 import { ChatAttachments } from './ChatAttachments';
+import { useChatScroll } from './useChatScroll';
 
 export function ChatInterface() {
   const [draft, setDraft] = useState('');
@@ -18,29 +19,23 @@ export function ChatInterface() {
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const nearBottom = useRef(true);
+  const { scrollRef, contentRef, followLatest, pauseFollowing } = useChatScroll();
   const active = chat.turns.find((turn) => turn.status === 'queued' || turn.status === 'running');
   const last = chat.turns.at(-1);
   const pending = chat.pending && !chat.turns.some((turn) => turn.id === chat.pending?.id) ? chat.pending : null;
-
-  useEffect(() => {
-    if (nearBottom.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [last?.id, last?.response, last?.status, pending?.id, chat.loaded]);
 
   async function send(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const text = draft.trim();
     if ((!text && !attachments.ready.length) || attachments.blocked || active || chat.sending || pending || !chat.loaded) return;
-    nearBottom.current = true;
+    followLatest();
     setDraft('');
     const files = attachments.ready;
     // send() synchronously stores the pending envelope before draft files are cleared.
     const delivery = chat.send(text, undefined, files);
     attachments.clear();
     await delivery;
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
   }
 
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -54,7 +49,7 @@ export function ChatInterface() {
     const container = scrollRef.current;
     const height = container?.scrollHeight || 0;
     const top = container?.scrollTop || 0;
-    nearBottom.current = false;
+    pauseFollowing();
     await chat.loadOlder();
     requestAnimationFrame(() => {
       if (container) container.scrollTop = top + container.scrollHeight - height;
@@ -74,12 +69,10 @@ export function ChatInterface() {
       </header>
 
       <div className="eidos-v2-scroll min-h-0 flex-1 overflow-y-auto px-4 sm:px-8" ref={scrollRef}
-        onScroll={() => {
-          const element = scrollRef.current;
-          if (element) nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
-        }} role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text">
+        role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text">
+        <div ref={contentRef} className="flex min-h-full flex-col">
         {chat.turns.length || pending ? (
-          <div className="mx-auto w-full max-w-[800px] py-8 sm:py-10">
+          <div className="mx-auto w-full max-w-[800px] shrink-0 py-8 sm:py-10">
             {chat.hasOlder ? <button className="mx-auto mb-7 block text-[13px] text-muted-foreground hover:text-foreground disabled:opacity-50" disabled={chat.loadingOlder} onClick={() => void loadOlder()} type="button">
               {chat.loadingOlder ? 'Loading…' : 'Earlier messages'}
             </button> : null}
@@ -112,15 +105,15 @@ export function ChatInterface() {
                 </div>
               </li> : null}
             </ol>
-            <div ref={bottomRef} />
           </div>
         ) : (
-          <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-5 pb-10">
+          <div className="flex min-h-[240px] flex-1 flex-col items-center justify-center gap-5 pb-10">
             {chat.loaded ? <>
               <h2 className="eidos-v2-wordmark text-[38px] leading-none tracking-[-0.035em] text-foreground sm:text-[42px]">Eidos</h2>
             </> : <LoaderCircle aria-label="Loading conversation" className="size-5 animate-spin text-muted-foreground motion-reduce:animate-none" />}
           </div>
         )}
+        </div>
       </div>
 
       <div className="eidos-v2-composer shrink-0 bg-background px-3 pt-2 sm:px-7">
