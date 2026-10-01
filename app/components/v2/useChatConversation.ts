@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatHistory, ChatTurn } from '@/types/chat';
 import { messageForSend, parsePendingMessage, type PendingMessage } from '@/lib/chat-settings';
-import { defaultChatSettings, parseChatSettings, type ChatSettings } from '../../../shared/chat-settings.mjs';
+import { defaultChatSettings, parseChatSettings, restoreChatPreference, type ChatSettings } from '../../../shared/chat-settings.mjs';
 
 const pendingKey = 'eidos-chat-pending';
 const settingsKey = 'eidos-chat-settings-v1';
@@ -69,7 +69,7 @@ export function useChatConversation() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(settingsKey);
-      if (saved) setSettings(parseChatSettings(JSON.parse(saved)));
+      if (saved) setSettings(restoreChatPreference(JSON.parse(saved)));
     } catch { /* An obsolete preference uses the current default. */ }
     try {
       const saved = parsePendingMessage(JSON.parse(sessionStorage.getItem(pendingKey) || 'null'));

@@ -3,9 +3,9 @@
 import { ArrowUp, LoaderCircle, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useChatConversation } from './useChatConversation';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { ChatModelPicker } from './ChatModelPicker';
 import { turnSettings } from '@/lib/chat-settings';
-import { chatModels, chatSpeeds, chatSettingsLabel, type ChatSettings } from '../../../shared/chat-settings.mjs';
+import { chatSettingsLabel } from '../../../shared/chat-settings.mjs';
 
 export function ChatInterface() {
   const [draft, setDraft] = useState('');
@@ -115,16 +115,8 @@ export function ChatInterface() {
               id="eidos-message" maxLength={20000} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown}
               placeholder="Message Eidos" ref={inputRef} rows={2} value={draft} />
             <div className="flex flex-wrap items-center gap-1 px-1 pb-1 sm:gap-2 sm:px-2">
-              <NativeSelect aria-label="Model" title="Model" size="sm" className="max-w-[155px] border-transparent pl-2 text-[12px] text-muted-foreground shadow-none hover:bg-secondary hover:text-foreground"
-                value={pending?.settings?.model || chat.settings.model} disabled={!chat.loaded || chat.sending || Boolean(pending)}
-                onChange={(event) => chat.changeSettings({ ...chat.settings, model: event.target.value })}>
-                {chatModels.map((model) => <NativeSelectOption key={model.id} value={model.id}>{model.label}</NativeSelectOption>)}
-              </NativeSelect>
-              <NativeSelect aria-label="Speed" title="Fast mode uses more of your Codex allowance." size="sm" className="max-w-[145px] border-transparent pl-2 text-[12px] text-muted-foreground shadow-none hover:bg-secondary hover:text-foreground"
-                value={pending?.settings?.speed || chat.settings.speed} disabled={!chat.loaded || chat.sending || Boolean(pending)}
-                onChange={(event) => chat.changeSettings({ ...chat.settings, speed: event.target.value as ChatSettings['speed'] })}>
-                {chatSpeeds.map((speed) => <NativeSelectOption key={speed.id} value={speed.id}>{speed.label}</NativeSelectOption>)}
-              </NativeSelect>
+              <ChatModelPicker settings={pending?.settings || chat.settings}
+                disabled={!chat.loaded || chat.sending || Boolean(pending)} onChange={chat.changeSettings} />
               <button aria-label="Send message" className="ml-auto grid size-9 shrink-0 place-items-center rounded-sm bg-primary text-white transition hover:bg-primary/85 disabled:bg-secondary disabled:text-muted-foreground"
                 disabled={!draft.trim() || !chat.loaded || Boolean(active) || chat.sending || Boolean(pending)} type="submit">
                 <ArrowUp aria-hidden="true" className="size-[18px]" strokeWidth={2} />

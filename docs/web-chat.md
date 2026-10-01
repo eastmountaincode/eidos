@@ -14,19 +14,27 @@ import Telegram's transcript or change Telegram's session.
 
 ## Model and speed
 
-The composer offers the Mac mini's verified models and Standard/Fast processing.
+The composer has one compact model button. Its menu contains GPT-6.1 Sol,
+GPT-6 Astra, GPT-6 Luna and Standard/Fast processing.
 Fast uses more of the existing ChatGPT/Codex allowance; it is not a reasoning-depth
 setting or a new API subscription. Browser preferences are stored locally, while
 each message's choices are saved as `settings_json` in D1 before the agent runs.
 Redelivery and explicit retries retain those original choices. A new message can
 switch models without losing the conversation's Codex session.
 
-`shared/chat-settings.mjs` is the shared allowlist, verified against the Mac mini's
-signed-in model catalog on October 1, 2026. Recheck that catalog before adding or
+`shared/chat-settings.mjs` is the shared allowlist, verified with real replies on
+Codex 0.159.3 on October 1, 2026. Recheck live access before adding or
 retiring models. Do not silently substitute a different model. The runner passes
 the model and service tier on both `exec` and `exec resume`; Standard explicitly
 resets the tier instead of inheriting a previous Fast setting. Existing messages
 without settings and Telegram keep their previous behavior.
+
+The web-chat LaunchAgent pins an Eidos-only Codex installation. Install it with
+`npm install --prefix /Users/oasis/.eidos/runtime/codex-0.159.3 --no-audit --no-fund @openai/codex@0.159.3`
+before loading the updated plist. This leaves the global Codex binary and Telegram
+runner unchanged. Codex 0.144.1 could not run these models. Legacy settings remain
+valid for saved turns/retries, but old browser preferences advance to GPT-6.1 Sol;
+the picker never offers legacy models.
 
 Existing deployments must apply `apps/api/agent_chat_settings.sql` once before
 deploying this Worker. New installations use the updated `agent_chat.sql`.
