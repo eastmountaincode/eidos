@@ -1,5 +1,5 @@
-import { AboutEidos } from '@/components/v2/AboutEidos';
+import { redirect } from 'next/navigation';
 
 export default function AboutPage() {
-  return <AboutEidos />;
+  redirect('/');
 }

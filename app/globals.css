@@ -23,28 +23,29 @@
   --color-accent: #0f766e;
   --color-accent-2: #a34517;
   --color-sidebar: #203030;
-  --color-background: #faf9f6;
-  --color-foreground: #193129;
-  --color-primary: #214b3c;
+  --color-background: #ffffff;
+  --color-foreground: #202020;
+  --color-primary: #202020;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #eeeee7;
-  --color-secondary-foreground: #193129;
-  --color-muted-foreground: #627169;
-  --color-accent-foreground: #193129;
-  --color-destructive: #9d4035;
-  --color-input: #d8ded6;
-  --color-ring: #709583;
+  --color-secondary: #f2f2f2;
+  --color-secondary-foreground: #202020;
+  --color-muted-foreground: #666666;
+  --color-accent-foreground: #202020;
+  --color-destructive: #ad2727;
+  --color-input: #d8d8d8;
+  --color-ring: #888888;
 }
 
-/* shadcn primitives inherit this content-first palette without restyling the legacy portal. */
-.eidos-inspector {
-  --color-muted: #efefe8;
-  --color-accent: #eeeee7;
-  --color-border: #dde1d8;
+/* Neutral workspace tokens also apply inside the portaled Settings panel. */
+.eidos-v2, .eidos-settings {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --color-muted: #f4f4f4;
+  --color-accent: #f2f2f2;
+  --color-border: #dedede;
 }
 
 @layer base {
-  .eidos-inspector * {
+  .eidos-v2 *, .eidos-settings * {
     border-color: var(--color-border);
   }
 }

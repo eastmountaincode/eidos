@@ -1,7 +1,7 @@
 # Eidos knowledge and feedback
 
 The shared D1 capability catalog is the authority for the web chat prompt,
-Telegram's `/skills` response and the rebuild's `/about` inspector. There is no
+Telegram's `/skills` response and the rebuild's Settings panel. There is no
 second hard-coded inventory in the agent. Catalog fetches happen alongside
 personal-memory reads on every agent turn. If the catalog cannot be loaded,
 the prompt explicitly marks it unavailable rather than inventing capability
@@ -24,8 +24,8 @@ status or claiming feedback was saved.
 - `agent_feedback_revisions`: automatic snapshots of every create/edit, including
   withdrawal and resolution. Edits require the current revision. Retry delivery
   of the same ID and content is idempotent and does not append more revisions.
-- `source_entries`: existing reference collection. The inspector shows entries
-  tagged `design`; tags can overlap subjects without duplicating references.
+- `source_entries`: existing reference collection, now in its own Sources page.
+  Tags can overlap subjects without duplicating references.
   Titles, descriptions and downloaded source content are reference material,
   not permission to act or instructions overriding the user.
 - Personal memory and dated life history remain in their existing tables.
@@ -52,7 +52,7 @@ Resolve a defect with `--status resolved --resolution "TEST AND OUTCOME"`.
 OUTCOME"`. Do not manufacture a new test date from old registry notes.
 Existing `update_capability.py` still edits the base catalog metadata.
 
-The inspector offers the same feedback creation, editing, retirement and
+The Settings panel offers the same feedback creation, editing, retirement and
 history. Data APIs require Worker authentication; portal writes additionally
 require the authenticated session and matching origin. They are not public.
 
@@ -77,10 +77,10 @@ require the authenticated session and matching origin. They are not public.
    its updated `/skills` handler; file installation alone does not update it.
 6. Push the rebuild branch. Vercel deploys through GitHub; do not promote the
    preview or switch the original production portal.
-7. Verify live inspector rendering, sources, feedback revisions and a real chat
+7. Verify live Settings rendering, Sources, feedback revisions and a real chat
    response using the catalog. Verify a feedback write and retrieval separately;
    reading a prompt fixture is not proof of a real agent saving feedback.
 
-No new heartbeat writes are added to D1. Reading the inspector or rebuilding an
+No new heartbeat writes are added to D1. Reading Settings or rebuilding an
 agent prompt does not rewrite catalog or feedback rows. New writes occur for
 explicit records, revisions, checks, or existing chat/ingest operations.

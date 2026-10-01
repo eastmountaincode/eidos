@@ -1,91 +1,142 @@
 "use client";
 
-import { Info, Menu, MessageCircle, MessagesSquare, X } from "lucide-react";
+import {
+  BookOpen,
+  Menu,
+  MessageCircle,
+  MessagesSquare,
+  Settings2,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { AgentSettings } from "./AgentSettings";
 
-// New sections can join this navigation as their pages are built.
 const sections = [
   { href: "/", label: "Chat", Icon: MessageCircle },
   { href: "/messages", label: "Messages", Icon: MessagesSquare },
+  { href: "/sources", label: "Sources", Icon: BookOpen },
 ];
 
 export function EidosShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const wordmark = (
+    <Link
+      aria-label="Eidos"
+      className="eidos-v2-wordmark text-[26px] leading-none tracking-[-0.035em] text-foreground"
+      href="/"
+      onClick={() => setMenuOpen(false)}
+    >
+      Eidos
+    </Link>
+  );
   const navigation = (
     <>
-      <div className="flex h-20 items-center justify-between px-6">
-        <Link className="eidos-v2-wordmark text-[32px] leading-none tracking-[-0.035em] text-[#19382e]" href="/" onClick={() => setMenuOpen(false)}>
-          Eidos
-        </Link>
-        <button
-          aria-label="Close navigation"
-          className="grid size-9 place-items-center rounded-xl text-[#69746d] hover:bg-white/70 md:hidden"
-          onClick={() => setMenuOpen(false)}
-          type="button"
-        >
-          <X className="size-5" />
-        </button>
-      </div>
-
-      <nav aria-label="Main navigation" className="border-t border-[#e4e5dd] px-3 pt-4">
-        <div className="grid gap-1">
-          {sections.map(({ href, label, Icon }) => {
-            const active = pathname === href;
-            return (
-              <Link
-                aria-current={active ? "page" : undefined}
-                className={`flex h-11 items-center gap-3 rounded-xl px-3 text-[14px] font-medium transition-colors ${active ? "bg-white text-[#19382e] shadow-[0_1px_5px_rgba(34,47,38,0.05)]" : "text-[#637069] hover:bg-white/55 hover:text-[#19382e]"}`}
-                href={href}
-                key={href}
-                onClick={() => setMenuOpen(false)}
-              >
-                <Icon aria-hidden="true" className="size-[18px]" strokeWidth={1.8} />
-                {label}
-              </Link>
-            );
-          })}
-        </div>
+      <nav aria-label="Main navigation" className="grid gap-0.5 px-2">
+        {sections.map(({ href, label, Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            aria-current={pathname === href ? "page" : undefined}
+            onClick={() => setMenuOpen(false)}
+            className={`flex h-8 items-center gap-2.5 rounded-sm px-2 text-[13px] ${pathname === href ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"}`}
+          >
+            <Icon className="size-4" strokeWidth={1.5} aria-hidden />
+            {label}
+          </Link>
+        ))}
       </nav>
-      <div className="mt-auto px-3 pb-4 pt-6">
-        <Link href="/about" aria-current={pathname === '/about' ? 'page' : undefined} onClick={() => setMenuOpen(false)} className={`flex h-10 items-center gap-3 rounded-xl px-3 text-[13px] ${pathname === '/about' ? 'bg-white text-[#19382e]' : 'text-[#637069] hover:bg-white/55'}`}>
-          <Info className="size-4" aria-hidden="true" />About Eidos
-        </Link>
+      <div className="mt-auto p-2">
+        <Button
+          data-settings-trigger
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start gap-2.5 rounded-sm px-2 text-[13px] font-normal text-muted-foreground"
+          onClick={() => {
+            setMenuOpen(false);
+            setSettingsOpen(true);
+          }}
+        >
+          <Settings2 className="size-4" strokeWidth={1.5} />
+          Settings
+        </Button>
       </div>
     </>
   );
-
   return (
-    <div className="eidos-v2 flex h-dvh min-h-[480px] overflow-hidden bg-[#faf9f6] text-[#193129]">
-      <aside className="hidden w-[252px] shrink-0 flex-col border-r border-[#e6e5de] bg-[#f1f0eb] md:flex">{navigation}</aside>
-
-      {menuOpen ? (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <button aria-label="Close navigation" className="absolute inset-0 bg-[#10241d]/30" onClick={() => setMenuOpen(false)} type="button" />
-          <aside className="relative flex h-full w-[min(82vw,290px)] flex-col bg-[#f1f0eb] shadow-2xl">{navigation}</aside>
-        </div>
-      ) : null}
-
+    <div className="eidos-v2 flex h-dvh min-h-[320px] overflow-hidden bg-background text-foreground">
+      <aside className="hidden w-[176px] shrink-0 flex-col border-r border-border bg-[#f6f6f6] md:flex">
+        <div className="flex h-14 items-center px-4">{wordmark}</div>
+        {navigation}
+      </aside>
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent
+          side="left"
+          className="eidos-settings w-[224px] gap-0 bg-[#f6f6f6]"
+          aria-describedby={undefined}
+        >
+          <SheetHeader className="h-14 justify-center">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            {wordmark}
+          </SheetHeader>
+          {navigation}
+        </SheetContent>
+      </Sheet>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[#e9e7df] bg-[#faf9f6] px-4 md:hidden">
-          <button
+        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-2 md:hidden">
+          <Button
             aria-label="Open navigation"
             aria-expanded={menuOpen}
-            className="grid size-9 place-items-center rounded-xl text-[#19382e] hover:bg-[#efeee8]"
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setMenuOpen(true)}
-            type="button"
           >
-            <Menu className="size-5" />
-          </button>
-          <Link className="eidos-v2-wordmark text-[26px] leading-none tracking-[-0.035em] text-[#19382e]" href="/">
-            Eidos
-          </Link>
+            <Menu className="size-4" />
+          </Button>
+          {wordmark}
+          <Button
+            data-settings-trigger
+            aria-label="Settings"
+            className="ml-auto"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings2 className="size-4" />
+          </Button>
         </header>
         <main className="min-h-0 min-w-0 flex-1">{children}</main>
       </div>
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent
+          className="eidos-settings w-full gap-0 sm:max-w-[480px]"
+          aria-describedby={undefined}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            Array.from(
+              document.querySelectorAll<HTMLButtonElement>(
+                "[data-settings-trigger]",
+              ),
+            )
+              .find((button) => button.getClientRects().length)
+              ?.focus();
+          }}
+        >
+          <SheetHeader className="h-12 shrink-0 justify-center border-b border-border py-0">
+            <SheetTitle className="text-sm">Settings</SheetTitle>
+          </SheetHeader>
+          {settingsOpen && <AgentSettings />}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

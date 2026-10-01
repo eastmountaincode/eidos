@@ -11,7 +11,7 @@ the Mac mini agent. See [web conversation setup](docs/web-chat.md) for the
 service, delivery guarantees and deployment steps.
 
 The rebuild's [capability and feedback foundation](docs/agent-knowledge.md)
-connects chat to the same catalog shown in About Eidos. Product feedback has
+connects chat to the same catalog shown in Settings. Product feedback has
 provenance and revisions, separate from personal memory and saved sources.
 
 First build target:

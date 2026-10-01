@@ -49,9 +49,9 @@ export function ChatInterface() {
 
   return (
     <section aria-label="Chat" className="flex h-full min-h-0 flex-col">
-      <header className="flex h-[68px] shrink-0 items-center justify-between gap-3 border-b border-[#eceae3] bg-white/65 px-4 sm:px-7">
-        <h1 className="text-[16px] font-semibold text-[#193129] sm:text-[17px]">Conversation</h1>
-        {chat.loaded && !chat.online ? <span className="text-[12px] text-[#7b827b]">Agent offline</span> : null}
+      <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 sm:px-7">
+        <h1 className="text-sm font-semibold text-foreground">Chat</h1>
+        {chat.loaded && !chat.online ? <span className="text-[12px] text-muted-foreground">Agent offline</span> : null}
       </header>
 
       <div className="eidos-v2-scroll min-h-0 flex-1 overflow-y-auto px-4 sm:px-8" ref={scrollRef}
@@ -61,33 +61,33 @@ export function ChatInterface() {
         }} role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text">
         {chat.turns.length || pending ? (
           <div className="mx-auto w-full max-w-[800px] py-8 sm:py-10">
-            {chat.hasOlder ? <button className="mx-auto mb-7 block text-[13px] text-[#637069] hover:text-[#19382e] disabled:opacity-50" disabled={chat.loadingOlder} onClick={() => void loadOlder()} type="button">
+            {chat.hasOlder ? <button className="mx-auto mb-7 block text-[13px] text-muted-foreground hover:text-foreground disabled:opacity-50" disabled={chat.loadingOlder} onClick={() => void loadOlder()} type="button">
               {chat.loadingOlder ? 'Loading…' : 'Earlier messages'}
             </button> : null}
             <ol className="flex flex-col gap-7">
               {chat.turns.map((turn) => (
                 <li className="space-y-5" id={`turn-${turn.id}`} key={turn.id}>
-                  <div className="flex justify-end"><div className="max-w-[min(85%,620px)] whitespace-pre-wrap break-words rounded-[22px] rounded-br-[7px] bg-[#214335] px-4 py-3 text-[14px] leading-[1.6] text-white sm:px-5 sm:text-[15px]">
+                  <div className="flex justify-end"><div className="max-w-[min(85%,620px)] whitespace-pre-wrap break-words rounded-md bg-secondary px-4 py-3 text-[14px] leading-[1.6] text-foreground sm:px-5 sm:text-[15px]">
                     <span className="sr-only">You: </span>{turn.prompt}
                   </div></div>
-                  {turn.response ? <div className="max-w-[720px] whitespace-pre-wrap break-words px-1 text-[14px] leading-[1.75] text-[#213d2c] sm:text-[15px]">
+                  {turn.response ? <div className="max-w-[720px] whitespace-pre-wrap break-words px-1 text-[14px] leading-[1.75] text-foreground sm:text-[15px]">
                     <span className="sr-only">Eidos: </span>{turn.response}
                   </div> : null}
-                  {turn.status === 'queued' || turn.status === 'running' ? <div className="flex items-center gap-2 px-1 text-[13px] text-[#708075]" role="status">
+                  {turn.status === 'queued' || turn.status === 'running' ? <div className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground" role="status">
                     <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" />
                     {turn.status === 'running' ? 'Thinking…' : chat.online ? 'Sending to Eidos…' : 'Waiting for Eidos to reconnect…'}
                   </div> : null}
-                  {turn.status === 'failed' ? <div className="space-y-2 px-1 text-[13px] text-[#9a4a32]">
+                  {turn.status === 'failed' ? <div className="space-y-2 px-1 text-[13px] text-destructive">
                     <p>{turn.error || 'Eidos could not finish this reply.'}</p>
-                    {turn.id === last?.id ? <button className="inline-flex items-center gap-1.5 text-[#526958] hover:text-[#19382e] disabled:opacity-40" disabled={Boolean(active) || chat.sending || Boolean(pending)} onClick={() => void chat.send(turn.prompt, turn)} type="button">
+                    {turn.id === last?.id ? <button className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40" disabled={Boolean(active) || chat.sending || Boolean(pending)} onClick={() => void chat.send(turn.prompt, turn)} type="button">
                       <RotateCcw aria-hidden="true" className="size-3.5" />Try again
                     </button> : null}
                   </div> : null}
                 </li>
               ))}
               {pending ? <li className="space-y-2">
-                <div className="flex justify-end"><div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[22px] rounded-br-[7px] bg-[#214335] px-4 py-3 text-[15px] leading-relaxed text-white">{pending.prompt}</div></div>
-                <div className="text-right text-[12px] text-[#708075]">
+                <div className="flex justify-end"><div className="max-w-[85%] whitespace-pre-wrap break-words rounded-md bg-secondary px-4 py-3 text-[15px] leading-relaxed text-foreground">{pending.prompt}</div></div>
+                <div className="text-right text-[12px] text-muted-foreground">
                   {chat.sending ? 'Sending…' : <button type="button" onClick={() => void chat.send(pending.prompt)}>Confirm delivery</button>}
                 </div>
               </li> : null}
@@ -97,23 +97,22 @@ export function ChatInterface() {
         ) : (
           <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-5 pb-10">
             {chat.loaded ? <>
-              <div aria-hidden="true" className="eidos-v2-wordmark grid size-[72px] place-items-center rounded-[24px] border border-[#dbe5d9] bg-[#edf2e9] text-[52px] leading-none text-[#255341] shadow-[0_8px_28px_rgba(30,66,47,0.06)]">e</div>
-              <h2 className="eidos-v2-wordmark text-[38px] leading-none tracking-[-0.035em] text-[#254235] sm:text-[42px]">Eidos</h2>
-            </> : <LoaderCircle aria-label="Loading conversation" className="size-5 animate-spin text-[#708075] motion-reduce:animate-none" />}
+              <h2 className="eidos-v2-wordmark text-[38px] leading-none tracking-[-0.035em] text-foreground sm:text-[42px]">Eidos</h2>
+            </> : <LoaderCircle aria-label="Loading conversation" className="size-5 animate-spin text-muted-foreground motion-reduce:animate-none" />}
           </div>
         )}
       </div>
 
-      <div className="eidos-v2-composer shrink-0 bg-[#faf9f6] px-3 pt-2 sm:px-7">
-        {chat.error ? <p className="mx-auto mb-3 max-w-[800px] px-2 text-[13px] text-[#9a4a32]" role="alert">{chat.error}</p> : null}
+      <div className="eidos-v2-composer shrink-0 bg-background px-3 pt-2 sm:px-7">
+        {chat.error ? <p className="mx-auto mb-3 max-w-[800px] px-2 text-[13px] text-destructive" role="alert">{chat.error}</p> : null}
         <form className="mx-auto w-full max-w-[800px]" onSubmit={(event) => void send(event)}>
-          <div className="rounded-[22px] border border-[#dadfd6] bg-white p-2 shadow-[0_8px_32px_rgba(36,58,41,0.075)] focus-within:border-[#a8bbab] sm:p-3">
+          <div className="rounded-md border border-border bg-white p-2 shadow-none focus-within:border-ring sm:p-3">
             <label className="sr-only" htmlFor="eidos-message">Message Eidos</label>
-            <textarea className="eidos-v2-textarea block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 pt-2 text-[15px] leading-relaxed text-[#1b3427] outline-none placeholder:text-[#98a29a] sm:px-3"
+            <textarea className="eidos-v2-textarea block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 pt-2 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground sm:px-3"
               id="eidos-message" maxLength={20000} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown}
               placeholder="Message Eidos" ref={inputRef} rows={2} value={draft} />
             <div className="flex items-center justify-end px-1 pb-1 sm:px-2">
-              <button aria-label="Send message" className="grid size-9 place-items-center rounded-xl bg-[#214335] text-white transition hover:bg-[#315b46] disabled:bg-[#e8ece6] disabled:text-[#a2ada4]"
+              <button aria-label="Send message" className="grid size-9 place-items-center rounded-sm bg-primary text-white transition hover:bg-primary/85 disabled:bg-secondary disabled:text-muted-foreground"
                 disabled={!draft.trim() || !chat.loaded || Boolean(active) || chat.sending || Boolean(pending)} type="submit">
                 <ArrowUp aria-hidden="true" className="size-[18px]" strokeWidth={2} />
               </button>
