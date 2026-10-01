@@ -3,6 +3,16 @@ import test from 'node:test';
 import { messageForSend, parsePendingMessage } from './chat-settings';
 import type { ChatTurn } from '../types/chat';
 import { chatModels, defaultChatSettings, parseChatSettings, restoreChatPreference } from '../../shared/chat-settings.mjs';
+import { parseAttachments } from '../../shared/chat-attachments.mjs';
+
+test('files survive pending-message recovery and cannot change on retry', () => {
+  const files = parseAttachments([{ id: crypto.randomUUID(), name: 'notes.txt', size: 12, sha256: 'a'.repeat(64) }]);
+  const message = messageForSend('', defaultChatSettings, null, undefined, files);
+  assert.deepEqual(parsePendingMessage(JSON.parse(JSON.stringify(message))), message);
+  assert.deepEqual(messageForSend('new draft', defaultChatSettings, message, undefined, []), message);
+  const retry = { id: message.id, prompt: '', settings_json: JSON.stringify(defaultChatSettings), attachments_json: JSON.stringify(files) } as ChatTurn;
+  assert.deepEqual(messageForSend('ignored', defaultChatSettings, null, retry, []), message);
+});
 
 test('the picker offers current models and upgrades preferences without rewriting pending work', () => {
   assert.deepEqual(chatModels.map(model => model.id), ['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-luna']);

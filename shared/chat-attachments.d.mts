@@ -1,0 +1,10 @@
+export type ChatAttachment = { id: string; name: string; size: number; type: string; sha256: string };
+export const MAX_FILE_BYTES: number;
+export const MAX_MESSAGE_BYTES: number;
+export const MAX_ATTACHMENTS: number;
+export const attachmentAccept: string;
+export function attachmentMetadata(value: unknown): Pick<ChatAttachment, 'name' | 'size' | 'type'>;
+export function parseAttachments(value?: unknown): ChatAttachment[];
+export function savedAttachments(json?: string | null): ChatAttachment[];
+export function fileSize(bytes: number): string;
+export function isPreviewImage(file: Pick<ChatAttachment, 'type'>): boolean;

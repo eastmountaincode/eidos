@@ -1,6 +1,8 @@
 import { parseChatSettings } from '../../../shared/chat-settings.mjs';
+import { parseAttachments } from '../../../shared/chat-attachments.mjs';
+import { validateStoredAttachments } from './chat-files.mjs';
 
-const publicFields = 'seq, id, conversation_id, prompt, response, status, revision, error, model, settings_json, created_at, updated_at';
+const publicFields = 'seq, id, conversation_id, prompt, response, status, revision, error, model, settings_json, attachments_json, created_at, updated_at';
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -117,10 +119,15 @@ export async function handleAgentChat(request, env) {
     const body = await request.json().catch(() => null);
     const conversation = conversationId(body?.conversation || 'main');
     if (!body || !conversation || typeof body.id !== 'string' || !/^[a-zA-Z0-9-]{16,80}$/.test(body.id)
-      || typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 20000) {
+      || typeof body.prompt !== 'string' || body.prompt.length > 20000) {
       return json({ error: 'Please enter a message of at most 20,000 characters.' }, 400);
     }
     const existing = await publicTurn(env, body.id);
+    let attachments;
+    try { attachments = parseAttachments(body.attachments ?? (existing ? JSON.parse(existing.attachments_json) : [])); }
+    catch (error) { return json({ error: error.message }, 400); }
+    const attachmentsJson = JSON.stringify(attachments);
+    if (!body.prompt.trim() && !attachments.length) return json({ error: 'Enter a message or attach a file.' }, 400);
     // Old clients omit settings. Redelivery/retry preserves the original choices.
     let settingsJson = existing?.settings_json ?? null;
     if (body.settings !== undefined && body.settings !== null) {
@@ -129,7 +136,7 @@ export async function handleAgentChat(request, env) {
     }
     if (existing) {
       if (existing.conversation_id !== conversation || existing.prompt !== body.prompt.trim()
-        || existing.settings_json !== settingsJson) {
+        || existing.settings_json !== settingsJson || existing.attachments_json !== attachmentsJson) {
         return json({ error: 'This message ID is already in use.' }, 409);
       }
       // Repeating a request after a connection loss returns the original turn.
@@ -138,6 +145,8 @@ export async function handleAgentChat(request, env) {
         .bind(conversation, existing.seq).first();
       if (newer) return json({ error: 'Only the latest message can be retried. Send a new message to continue.' }, 409);
     }
+    try { await validateStoredAttachments(env, attachments); }
+    catch (error) { return json({ error: error.message }, 400); }
     try {
       if (existing) {
         await env.DB.prepare(`UPDATE agent_chat_turns SET
@@ -148,13 +157,13 @@ export async function handleAgentChat(request, env) {
           response = '', claim_token = NULL, updated_at = datetime('now') WHERE id = ? AND status = 'failed'`)
           .bind(body.id).run();
       } else {
-        await env.DB.prepare(`INSERT INTO agent_chat_turns (id, conversation_id, prompt, status, settings_json)
-          VALUES (?, ?, ?, 'queued', ?)`).bind(body.id, conversation, body.prompt.trim(), settingsJson).run();
+        await env.DB.prepare(`INSERT INTO agent_chat_turns (id, conversation_id, prompt, status, settings_json, attachments_json)
+          VALUES (?, ?, ?, 'queued', ?, ?)`).bind(body.id, conversation, body.prompt.trim(), settingsJson, attachmentsJson).run();
       }
     } catch (error) {
       const duplicate = await publicTurn(env, body.id);
       if (duplicate && duplicate.conversation_id === conversation && duplicate.prompt === body.prompt.trim()
-        && duplicate.settings_json === settingsJson
+        && duplicate.settings_json === settingsJson && duplicate.attachments_json === attachmentsJson
         && duplicate.status !== 'failed') return json({ turn: duplicate });
       if (String(error).includes('UNIQUE constraint')) {
         return json({ error: 'Eidos is still answering your previous message.' }, 409);

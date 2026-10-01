@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatHistory, ChatTurn } from '@/types/chat';
 import { messageForSend, parsePendingMessage, type PendingMessage } from '@/lib/chat-settings';
 import { defaultChatSettings, parseChatSettings, restoreChatPreference, type ChatSettings } from '../../../shared/chat-settings.mjs';
+import type { ChatAttachment } from '../../../shared/chat-attachments.mjs';
 
 const pendingKey = 'eidos-chat-pending';
 const settingsKey = 'eidos-chat-settings-v1';
@@ -126,9 +127,9 @@ export function useChatConversation() {
     };
   }, [merge]);
 
-  async function send(prompt: string, retryTurn?: ChatTurn) {
+  async function send(prompt: string, retryTurn?: ChatTurn, attachments?: ChatAttachment[]) {
     if (sendingRef.current) return false;
-    const message = messageForSend(prompt, settings, pendingRef.current, retryTurn);
+    const message = messageForSend(prompt, settings, pendingRef.current, retryTurn, attachments);
     sendingRef.current = true;
     setSending(true);
     setError('');

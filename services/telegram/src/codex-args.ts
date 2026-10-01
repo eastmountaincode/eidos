@@ -5,11 +5,13 @@ export function buildCodexArgs(opts: {
   defaultModel?: string;
   resumeSessionId?: string;
   settings?: ChatSettings;
+  images?: string[];
 }): string[] {
   const common = ['--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'];
   const settings = opts.settings ? parseChatSettings(opts.settings) : undefined;
   const model = settings?.model || opts.defaultModel;
   if (model) common.push('--model', model);
+  for (const path of opts.images || []) common.push('--image', path);
   if (settings) {
     // Explicitly reset Standard on resume; never inherit a previous turn's Fast tier.
     common.push('--config', 'features.fast_mode=true', '--config',

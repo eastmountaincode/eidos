@@ -9,6 +9,7 @@ export type ChatTurn = {
   error: string | null;
   model: string | null;
   settings_json: string | null;
+  attachments_json?: string;
   created_at: string;
   updated_at: string;
 };

@@ -1,4 +1,5 @@
 import { handleAgentChat } from './agent-chat.mjs';
+import { handleChatFiles } from './chat-files.mjs';
 import { handleAgentKnowledge, readCapabilities } from './agent-knowledge.mjs';
 
 function json(data, status = 200) {
@@ -101,6 +102,9 @@ export class MessageJobWake {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    const fileResponse = await handleChatFiles(request, env);
+    if (fileResponse) return fileResponse;
 
     if (!requireAuth(request, env)) {
       return unauthorized();

@@ -72,6 +72,7 @@ export async function sendMessage(
     sourceRef?: string;
     retryTransient?: boolean;
     settings?: ChatSettings;
+    images?: string[];
   },
 ): Promise<AgentResponse> {
   const queryKey = `${Date.now()}-${Math.random()}`;
@@ -104,6 +105,7 @@ async function runCodex(
     channel?: 'telegram' | 'web';
     sourceRef?: string;
     settings?: ChatSettings;
+    images?: string[];
   },
   queryKey: string,
 ): Promise<AgentResponse> {

@@ -41,6 +41,46 @@ deploying this Worker. New installations use the updated `agent_chat.sql`.
 Install `shared/chat-settings.mjs` and `services/telegram/src/codex-args.ts` with
 the updated runner and web-chat adapter on the Mac mini before exposing selectors.
 
+## Attachments
+
+The paperclip, file drop and image paste paths share the same uploader. Limits:
+25 MiB per file, 5 files and 50 MiB per message. Supported formats are defined in
+`shared/chat-attachments.mjs`: common images (including HEIC), PDF, text/code,
+CSV/TSV/JSON, DOCX, XLSX, PPTX and RTF. Executables, archives, legacy binary Office
+formats, audio and video are not accepted yet. Uploads have progress, removal and
+explicit retry. Ready draft files and pending sends survive a same-tab refresh.
+
+Files upload directly to the Worker using ten-minute, origin-bound, content-hash
+bound tickets minted by the authenticated same-origin portal route. This bypasses
+Vercel's binary request-size limit. Originals live in the private `eidos-chat-files`
+R2 bucket (`CHAT_FILES` binding), with immutable UUID keys and metadata. D1 stores
+only attachment references in each turn's `attachments_json`; no file blobs or
+upload-progress writes. Repeated sends/retries retain the original files. Download
+links require portal authentication, then redirect to a ten-minute file-scoped
+ticket. Only raster images can display inline; other downloads use attachment
+disposition and no-sniff. Do not enable a public R2 domain for this bucket.
+
+The Mac mini verifies the original's size/hash and caches it under
+`data/inbox/web/<uuid>/original.<ext>`. Images are normalized with macOS `sips`
+and passed as Codex image inputs, including on resumed sessions. PDF text and up
+to three preview pages are prepared automatically with PyMuPDF. The agent can
+read/render more pages using the original and the documented helper. Office
+files provide text/cells without executing macros/formulas; layout/charts are not
+represented in that extraction. Failed extraction is explicitly reported to the
+agent, never treated as successful reading. Uploaded content is reference data,
+not instructions or executable code. Files are retained, including abandoned
+uploads; automatic cleanup is not implemented. Agent-generated output downloads
+are a separate future feature.
+
+For existing deployments, apply `apps/api/agent_chat_attachments.sql` once before
+the Worker update (new databases use `agent_chat.sql`). Create the private R2
+bucket in the configured Cloudflare account. Install the shared attachments
+module, `chat-attachments.ts`, `scripts/read_attachment.py`, and updated runner
+files together from the committed revision. The reader expects Python at
+`/Users/oasis/.eidos/runtime/attachments/bin/python` with the pinned
+`scripts/attachments-requirements.txt` installed. The live installation uses an
+isolated Python 3.13.12 environment; it does not depend on system/Homebrew Python.
+
 ## Delivery behavior
 
 - Each send has an ID created before transmission. Repeating delivery of that ID

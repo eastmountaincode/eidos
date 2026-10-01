@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildCodexArgs } from './codex-args.js';
 
+test('images reach both new and resumed turns as separate arguments', () => {
+  for (const resumeSessionId of [undefined, 'saved-session']) {
+    const args = buildCodexArgs({ workspacePath: '/workspace', resumeSessionId, images: ['/safe/one.png', '/safe/two.png'], settings: { model: 'gpt-6.1-sol', speed: 'standard' } });
+    assert.deepEqual(args.flatMap((arg, i) => arg === '--image' ? [args[i + 1]] : []), ['/safe/one.png', '/safe/two.png']);
+    assert.equal(args.at(-1), '-');
+  }
+});
+
 test('selected settings override defaults for both new and resumed turns', () => {
   for (const resumeSessionId of [undefined, 'saved-session']) {
     const args = buildCodexArgs({ workspacePath: '/workspace', defaultModel: 'gpt-5.6-sol', resumeSessionId,
