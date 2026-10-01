@@ -14,7 +14,10 @@ function wakeStub(env) {
 
 async function signal(env, path) {
   const stub = wakeStub(env);
-  if (stub) await stub.fetch(new Request(`https://agent-chat${path}`, { method: 'POST' }));
+  // Wakes are hints. D1 is the durable queue; an exhausted/unavailable wake
+  // channel must not prevent sending, claiming, or saving a real reply.
+  if (stub) try { await stub.fetch(new Request(`https://agent-chat${path}`, { method: 'POST' })); }
+  catch { console.error('Agent wake channel unavailable'); }
 }
 
 async function expireInterruptedTurns(env) {
@@ -37,9 +40,13 @@ export async function handleAgentChat(request, env) {
   if (!url.pathname.startsWith('/api/agent-chat')) return null;
 
   if (url.pathname === '/api/agent-chat/wait' && request.method === 'GET') {
-    await signal(env, '/heartbeat');
+    return json({ error: 'Use /api/agent-chat/connect; long polling is retired.' }, 410);
+  }
+
+  if (url.pathname === '/api/agent-chat/connect' && request.method === 'GET') {
     const stub = wakeStub(env);
-    return stub ? stub.fetch(new Request('https://agent-chat/wait?timeout=25')) : json({ woken: false });
+    return stub ? stub.fetch(new Request('https://agent-chat/connect', request))
+      : json({ error: 'Wake channel is not configured' }, 503);
   }
 
   if (url.pathname === '/api/agent-chat/claim' && request.method === 'POST') {
@@ -111,7 +118,9 @@ export async function handleAgentChat(request, env) {
     const turns = rows.results.slice(0, 50);
     if (!ascending) turns.reverse();
     const stub = wakeStub(env);
-    const presence = stub ? await (await stub.fetch(new Request('https://agent-chat/status'))).json() : { online: false };
+    let presence = { online: false };
+    if (stub) try { presence = await (await stub.fetch(new Request('https://agent-chat/status'))).json(); }
+    catch { /* History remains available even when the wake channel is down. */ }
     return json({ turns, has_more: hasMore, agent_online: presence.online });
   }
 

@@ -52,7 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=1)
     parser.add_argument("--preview", action="store_true", help="Print queued jobs without processing.")
     parser.add_argument("--daemon", action="store_true", help="Keep running and process queued jobs as wake events arrive.")
-    parser.add_argument("--wait-timeout", type=int, default=300, help="Seconds before renewing the job wake wait request.")
+    parser.add_argument("--wait-timeout", type=int, default=300, help="Seconds between fallback queue checks; waiting happens locally.")
     parser.add_argument("--error-retry-interval", type=int, default=30, help="Seconds to wait after a worker error before reconnecting.")
     parser.add_argument("--codex-bin", default=default_codex_bin())
     parser.add_argument("--codex-model", default=os.environ.get("EIDOS_SUMMARY_MODEL", "gpt-5.4-mini"))
@@ -657,23 +657,16 @@ def process_queued_jobs(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def wait_for_job_wake(args: argparse.Namespace) -> dict[str, Any]:
-    timeout = min(max(int(args.wait_timeout), 1), 300)
-    query = urllib.parse.urlencode({"timeout": timeout})
-    return request_json(
-        args.api_url,
-        args.api_token,
-        f"/api/messages/jobs/wait?{query}",
-        timeout=timeout + 15,
-    )
-
-
 def run_daemon(args: argparse.Namespace) -> None:
+    from wake_channel import WakeChannel
+
     stopped = False
+    wake = WakeChannel(args.api_url, args.api_token)
 
     def stop(_signum: int, _frame: Any) -> None:
         nonlocal stopped
         stopped = True
+        wake.close()
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
@@ -687,6 +680,7 @@ def run_daemon(args: argparse.Namespace) -> None:
 
     while not stopped:
         try:
+            revision = wake.revision
             result = process_queued_jobs(args)
             if result["ingests_processed"] or result["summaries_processed"] or result["view_summaries_processed"]:
                 print(json.dumps({
@@ -696,20 +690,16 @@ def run_daemon(args: argparse.Namespace) -> None:
                 }, indent=2), flush=True)
                 continue
 
-            wake = wait_for_job_wake(args)
-            if wake.get("woken"):
-                print(json.dumps({
-                    "event": "job_wake_received",
-                    **wake,
-                }), flush=True)
+            wake.wait_since(revision, timeout=min(max(int(args.wait_timeout), 30), 300))
         except Exception as exc:
             print(json.dumps({
                 "event": "message_worker_error",
                 "error": str(exc),
                 "occurred_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
             }), file=sys.stderr, flush=True)
-            time.sleep(max(int(args.error_retry_interval), 1))
+            wake.stopped.wait(max(int(args.error_retry_interval), 1))
 
+    wake.close()
     print(json.dumps({
         "event": "message_worker_stopped",
         "stopped_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),

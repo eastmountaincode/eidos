@@ -5,6 +5,7 @@ import { config } from './config.js';
 import { abortAllQueries, sendMessage } from './codex.js';
 import { parseChatSettings } from '../../../shared/chat-settings.mjs';
 import { prepareAttachments } from './chat-attachments.js';
+import { WakeChannel } from './wake-channel.js';
 
 type Turn = { id: string; prompt: string; claim_token: string; resume_session_id: string | null; settings_json: string | null; attachments_json?: string };
 type Result = { id: string; payload: Record<string, unknown> };
@@ -133,12 +134,15 @@ process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
 console.log('[web-chat] Starting Eidos web conversation worker');
+const wake = new WakeChannel(new URL('/api/agent-chat/connect', config.messages.workerUrl).href,
+  config.messages.apiToken || '', shutdown.signal);
 while (!stopping) {
   try {
+    const revision = wake.revision;
     await deliverSavedResult();
     const { turn } = await request<{ turn: Turn | null }>('/claim', {});
     if (turn) await processTurn(turn);
-    else await request('/wait', undefined, 'GET');
+    else await wake.waitSince(revision);
   } catch (error) {
     if (stopping) break;
     console.error('[web-chat]', String(error));

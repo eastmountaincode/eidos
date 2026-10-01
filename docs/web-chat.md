@@ -97,6 +97,35 @@ isolated Python 3.13.12 environment; it does not depend on system/Homebrew Pytho
   rows. Heartbeats occur only during active turns; there is no full-history
   delete/rewrite. No new paid model provider is introduced.
 
+### Low-cost wake connections
+
+Chat and Messages jobs use separate instances of `MessageJobWake`. Both accept
+authenticated outbound WebSockets from the Mac mini using `state.acceptWebSocket`.
+There are no server-side wait timers or pending HTTP long polls. A runtime-managed
+`ping`/`pong` auto-response preserves presence through hibernation without waking
+the object. Socket attachments and auto-response timestamps survive hibernation;
+constructor fields do not. Legacy `/wait` routes return 410 immediately.
+
+The Mac mini owns keepalive, reconnect/backoff and fallback timers. It captures a
+wake revision before checking the durable queue, so a notification during that
+check cannot be lost. Startup/reconnect drains queued work. A bounded fallback
+checks chat every 60 seconds and Messages every 300 seconds even if the wake
+channel is unavailable. Wakes are hints only; D1 remains the source of truth,
+and wake failure cannot prevent a chat message/reply being persisted.
+
+Deploy Worker and both clients together from a tested commit; no D1 migration is
+needed. Install `ws` from the Telegram lockfile and install the Messages-only
+`requirements-wake.txt` into `/Users/oasis/.eidos/runtime/message-wake` with the
+system Python's pip `--target`. The Messages LaunchAgent adds only that isolated
+directory to `PYTHONPATH` inside its loopback SSH command, retaining the existing
+Messages database permissions and Python executable. Back up installed files,
+restart only these two adapters while idle, then verify a real reply, a Messages
+job, Sources/Future, unchanged ingest and per-object duration after idle time.
+
+Do not restore long polling to work around a connection issue: it consumes
+billable wall-clock time continuously. Cloudflare's hibernation docs:
+https://developers.cloudflare.com/durable-objects/best-practices/websockets/
+
 ## Install from a tested, clean commit
 
 1. Run the root build, `npm test` in `apps/api`, and `npm run typecheck` in
