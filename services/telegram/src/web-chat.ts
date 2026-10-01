@@ -78,6 +78,7 @@ async function processTurn(turn: Turn) {
     const result = await sendMessage(turn.prompt, {
       profile: 'personal',
       channel: 'web',
+      sourceRef: `eidos-chat:${turn.id}`,
       resumeSessionId: turn.resume_session_id || undefined,
       retryTransient: false,
       onPartialText: (text) => { partial = text; },

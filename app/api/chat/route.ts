@@ -1,10 +1,11 @@
 import { isPortalAuthed } from '@/lib/auth';
+import { hasSameOrigin } from '@/lib/request-origin';
 
 export const dynamic = 'force-dynamic';
 
 async function forward(request: Request) {
   if (!(await isPortalAuthed())) return Response.json({ error: 'Please sign in again.' }, { status: 401 });
-  if (request.method === 'POST' && request.headers.get('origin') !== new URL(request.url).origin) {
+  if (request.method === 'POST' && !hasSameOrigin(request)) {
     return Response.json({ error: 'Invalid request origin.' }, { status: 403 });
   }
   const base = process.env.EIDOS_WORKER_URL;

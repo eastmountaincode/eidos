@@ -67,6 +67,7 @@ export async function sendMessage(
     resumeSessionId?: string;
     onPartialText?: StreamCallback;
     channel?: 'telegram' | 'web';
+    sourceRef?: string;
     retryTransient?: boolean;
   },
 ): Promise<AgentResponse> {
@@ -98,11 +99,12 @@ async function runCodex(
     resumeSessionId?: string;
     onPartialText?: StreamCallback;
     channel?: 'telegram' | 'web';
+    sourceRef?: string;
   },
   queryKey: string,
 ): Promise<AgentResponse> {
   const args = buildArgs(opts.resumeSessionId);
-  const runtimePrompt = await buildPrompt(prompt, opts.profile, opts.channel);
+  const runtimePrompt = await buildPrompt(prompt, opts.profile, opts.channel, opts.sourceRef);
   const resumed = Boolean(opts.resumeSessionId);
   console.log(`[codex] Starting ${resumed ? 'resume' : 'new'} query (${queryKey})`);
   const child = spawn(config.codex.binary, args, {

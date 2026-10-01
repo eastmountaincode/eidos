@@ -23,6 +23,30 @@
   --color-accent: #0f766e;
   --color-accent-2: #a34517;
   --color-sidebar: #203030;
+  --color-background: #faf9f6;
+  --color-foreground: #193129;
+  --color-primary: #214b3c;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #eeeee7;
+  --color-secondary-foreground: #193129;
+  --color-muted-foreground: #627169;
+  --color-accent-foreground: #193129;
+  --color-destructive: #9d4035;
+  --color-input: #d8ded6;
+  --color-ring: #709583;
+}
+
+/* shadcn primitives inherit this content-first palette without restyling the legacy portal. */
+.eidos-inspector {
+  --color-muted: #efefe8;
+  --color-accent: #eeeee7;
+  --color-border: #dde1d8;
+}
+
+@layer base {
+  .eidos-inspector * {
+    border-color: var(--color-border);
+  }
 }
 
 body {

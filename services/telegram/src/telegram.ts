@@ -63,7 +63,7 @@ bot.command('profile', async (ctx) => {
 });
 
 bot.command('skills', async (ctx) => {
-  await ctx.reply(skillsText());
+  await sendChunked(ctx.chat.id, await skillsText());
 });
 
 bot.command('status', async (ctx) => {
@@ -103,33 +103,42 @@ bot.on('message:text', async (ctx) => {
     let sentMessage: { message_id: number } | undefined;
     let buffer = '';
     let lastEditTime = 0;
+    let partialUpdateChain = Promise.resolve();
 
-    const onPartialText = async (chunk: string) => {
-      buffer += chunk;
-      const now = Date.now();
-      if (now - lastEditTime < config.telegram.editDebounceMs) return;
+    const onPartialText = (chunk: string) => {
+      partialUpdateChain = partialUpdateChain.then(async () => {
+        buffer += chunk;
+        const now = Date.now();
+        if (now - lastEditTime < config.telegram.editDebounceMs) return;
 
-      const preview = buffer.slice(0, config.telegram.maxMessageLength);
+        const preview = buffer.slice(0, config.telegram.maxMessageLength);
 
-      try {
-        if (!sentMessage) {
-          sentMessage = await bot.api.sendMessage(chatId, preview);
-        } else {
-          await bot.api.editMessageText(chatId, sentMessage.message_id, preview);
+        try {
+          if (!sentMessage) {
+            sentMessage = await bot.api.sendMessage(chatId, preview);
+          } else {
+            await bot.api.editMessageText(chatId, sentMessage.message_id, preview);
+          }
+          lastEditTime = now;
+        } catch {
+          // Edit failures are non-critical.
         }
-        lastEditTime = now;
-      } catch {
-        // Edit failures are non-critical.
-      }
 
-      await ctx.replyWithChatAction('typing').catch(() => {});
+        await ctx.replyWithChatAction('typing').catch(() => {});
+      });
+      return partialUpdateChain;
     };
 
     const response = await sendMessage(ctx.message.text, {
       profile,
+      sourceRef: `telegram:${ctx.chat.id}:${ctx.message.message_id}`,
       resumeSessionId: existing?.sessionId || undefined,
       onPartialText,
     });
+
+    // Preserve the installed gateway's ordering: finish publishing the preview
+    // before deciding whether to edit it or send a new final message.
+    await partialUpdateChain;
 
     if (response.sessionId) {
       setSession(key, response.sessionId, profile);
@@ -182,6 +191,7 @@ async function forwardFilePrompt(ctx: Context, prompt: string): Promise<void> {
   await ctx.replyWithChatAction('typing');
   const response = await sendMessage(prompt, {
     profile,
+    sourceRef: `telegram:${ctx.chat?.id}:${ctx.message?.message_id}`,
     resumeSessionId: existing?.sessionId || undefined,
   });
   if (response.sessionId) {

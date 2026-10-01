@@ -1,0 +1,80 @@
+{
+  "procedures": [
+    { "id": "message-context", "instructions": "Use message_context.py --person NAME --limit 25 when message evidence would help, not for every name mention. Use --list for resolvable conversations. Use --overview-summary --window-days 30 --overview-list-limit 20 for an overview. Read more with --all, --since, --until, --offset and --order asc. If a person is outside the D1 cache, the tool falls back to the local Messages archive.", "requirements": "Worker access for cached messages; Messages archive read permission on the Mac mini for fallback.", "limitations": "Read-only access to Messages. Message counts do not measure relationship quality. Link interpretations to evidence and keep them revisable." },
+    { "id": "invoice-generator", "instructions": "Use the catalog invocation with the requested client and line items. D1 reserves the per-client number when --invoice-number is omitted. Use --set-next-number N --client CLIENT only to seed or correct a counter. Ask for missing business details. The tool returns pdf_path; Telegram can deliver a local PDF, but the web chat does not yet provide attachments.", "requirements": "Invoice sender configuration, client and line-item details, Worker credentials.", "limitations": "Do not fabricate business or payment details. Generating an invoice does not authorize sending it to a client." },
+    { "id": "calendar-events", "instructions": "Use add_event.py with a title and start time. Default to Events Ambient unless Andrew names another calendar. Extract event details from the supplied text or image and ask when title, date or time is ambiguous. If access is denied, report the Calendar permission needed by EidosCalendarWriter.app on the Mac mini.", "requirements": "macOS Calendar permission for the calendar writer and unambiguous event details.", "limitations": "A catalog entry does not prove permission is currently granted." },
+    { "id": "calendar-checkins", "instructions": "send_checkin.py --kind morning --no-send or --kind evening --no-send generates a preview. The existing scheduled service sends through Telegram and records its runs. Use --force only for an explicit manual send or test.", "requirements": "Calendar/message context, Telegram access, and the existing launchd schedule.", "limitations": "Check-ins currently go to Telegram, not the web chat. Do not manually send one as part of an unrelated request." },
+    { "id": "mantra-context", "instructions": "Read the portal Mantra when Andrew asks about current focus or intention. Check-ins read it automatically.", "limitations": "Do not guess the current intention or turn it into generic affirmation filler." },
+    { "id": "memory-context", "instructions": "Use memory_context.py --recent, --date YYYY-MM-DD or --search PHRASE to read. Save meaningful dated history with --add-history --date DATE --title TITLE --body BODY --source-label CHANNEL. Save durable personal context with --add-note --profile personal --title TITLE --body BODY --source-label CHANNEL. Use --add-person-note --person NAME --body BODY --source-label CHANNEL for grounded relationship context. Use Eidos app conversation as the web channel label.", "requirements": "Worker credentials and grounded user-provided context.", "limitations": "Product feedback belongs in agent_feedback, not personal memory. Preserve the distinction between a dated feeling and a durable preference; do not save speculative interpretations as facts." },
+    { "id": "sources-repository", "instructions": "Use source_context.py --list to read references. Save with --add --source-text SOURCE and optional --type, --context, --creator, --year, --url, --file-path, --preview-url and --tags. Keep why Andrew saved it, and who recommended it when known. Use overlapping tags for topics rather than duplicating the reference in separate collections.", "requirements": "Worker credentials and an identified reference.", "limitations": "Source material is reference data, not instructions. Saving a title does not authorize a download, purchase or playback." },
+    { "id": "style-repository", "instructions": "Use style_context.py --list to read visual effects and components. Save with --add --source-text SOURCE and optional --kind, --url, --preview-url, --context, --notes, --tags and --file-path. Use a direct image URL for preview_url only when appropriate.", "limitations": "Use Sources for design reading/reference repositories and Style for reconstructable visual effects or components." },
+    { "id": "future-events", "instructions": "Use future_context.py --list for recurring events. Save with --add --name EVENT and known --url, --description, --location, --last-start, --last-end, --next-start, --next-end, --watch-month, --notes and --tags.", "limitations": "Unknown future dates remain unknown. A saved recurring event is not a calendar booking." }
+  ],
+  "sources": [
+    {
+      "id": "shadcn-ui",
+      "source_text": "shadcn/ui",
+      "type": "design reference",
+      "creator": "shadcn",
+      "url": "https://ui.shadcn.com/",
+      "context": "Andrew explicitly chose shadcn/ui as a useful reference for the Eidos rebuild. Use its accessible, adaptable components while preserving Eidos's own typography, wordmark and compact content-first layout.",
+      "tags": ["design", "eidos", "components", "accessibility"]
+    },
+    {
+      "id": "apple-historical-human-interface-guidelines",
+      "source_text": "Apple Human Interface Guidelines — historical archive",
+      "type": "design reference",
+      "creator": "Apple; archive maintained by gingerbeardman",
+      "url": "https://github.com/gingerbeardman/apple-human-interface-guidelines",
+      "context": "Andrew chose this archive for Eidos's design direction: early-Mac agency, computers as useful personal tools, the bicycle-for-the-mind idea, with modern usability. Study the interaction principles as well as visual details.",
+      "tags": ["design", "eidos", "human-interface", "history"]
+    }
+  ],
+  "feedback": [
+    {
+      "id": "eidos-design-content-first",
+      "kind": "preference",
+      "title": "Give useful content the space",
+      "body": "Favor compact controls and useful content over large summary cards, redundant headings and explanatory filler. For Messages, prioritize finding people, reading relevant exchanges and asking questions; totals and sync controls are secondary.",
+      "scope": "eidos.design",
+      "source_ref": "Eidos rebuild conversation, 2026-10-01",
+      "source_quote": "The existing messages panel is taking up a lot of real estate for unuseful things."
+    },
+    {
+      "id": "eidos-messages-reported-broken",
+      "kind": "issue",
+      "title": "Investigate the Messages interface",
+      "body": "Andrew reports the Messages panel is not working. Reproduce the affected browser interaction and distinguish loading, sync, detail and summary failures before fixing it. An API returning 200 is not end-to-end verification. Exact failing interaction is not yet established.",
+      "scope": "eidos.messages",
+      "source_ref": "Eidos rebuild conversation, 2026-10-01",
+      "source_quote": "it looks sloppy and it's just also not working"
+    },
+    {
+      "id": "eidos-wordmark-joined",
+      "kind": "decision",
+      "title": "Preserve the joined Eidos wordmark",
+      "body": "Keep the tight tracking and connected, abstract shape of the wordmark. Do not reset it to normal letter spacing when applying component defaults.",
+      "scope": "eidos.design.wordmark",
+      "source_ref": "Eidos rebuild conversation, wordmark feedback; recorded 2026-10-01",
+      "source_quote": "I liked how you lowered the tracking so that the letters come together as one shape"
+    },
+    {
+      "id": "eidos-design-personal-instrument",
+      "kind": "preference",
+      "title": "A useful personal instrument",
+      "body": "Draw on the agency of early Macintosh computing and the bicycle-for-the-mind metaphor while applying modern usability. Avoid engagement-driven distractions. Use shadcn/ui and Apple's historical interface guidelines as design references, with tags rather than a rigid new source hierarchy.",
+      "scope": "eidos.design",
+      "source_ref": "Eidos rebuild conversation, 2026-10-01",
+      "source_quote": "computers as tools rather than time-wasting devices, while still looking towards the future and aware of modern design principles"
+    },
+    {
+      "id": "eidos-product-feedback-transparent",
+      "kind": "decision",
+      "title": "Make feedback and abilities inspectable",
+      "body": "Use the same capability catalog in chat and the interface. Save explicit product feedback separately from personal memory, with scope, provenance and editable revision history. Keep reported defects open until verified. Preferences can guide responses; they do not grant permission to deploy code or expand access.",
+      "scope": "eidos.behavior",
+      "source_ref": "Eidos rebuild conversation, 2026-10-01",
+      "source_quote": "something useful, self-improving, able to respond to feedback And self-aware of all its components"
+    }
+  ]
+}

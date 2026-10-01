@@ -1,4 +1,5 @@
 import { handleAgentChat } from './agent-chat.mjs';
+import { handleAgentKnowledge, readCapabilities } from './agent-knowledge.mjs';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -107,6 +108,8 @@ export default {
 
     const chatResponse = await handleAgentChat(request, env);
     if (chatResponse) return chatResponse;
+    const knowledgeResponse = await handleAgentKnowledge(request, env);
+    if (knowledgeResponse) return knowledgeResponse;
 
     if (request.method === 'GET' && url.pathname === '/api/messages/overview') {
       return getMessagesOverview(env, url);
@@ -295,24 +298,7 @@ export default {
 };
 
 async function getCapabilities(env) {
-  const capabilities = await env.DB.prepare(`
-    SELECT
-      id,
-      kind,
-      name,
-      status,
-      category,
-      summary,
-      invocation,
-      data_source,
-      notes,
-      sort_order,
-      updated_at
-    FROM agent_capabilities
-    ORDER BY kind ASC, sort_order ASC, name ASC
-  `).all();
-
-  return json({ capabilities: capabilities.results });
+  return json({ capabilities: await readCapabilities(env) });
 }
 
 async function getStyleEntries(env, url) {

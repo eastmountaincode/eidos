@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, MessageCircle, MessagesSquare, X } from "lucide-react";
+import { Info, Menu, MessageCircle, MessagesSquare, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -50,6 +50,11 @@ export function EidosShell({ children }: { children: ReactNode }) {
           })}
         </div>
       </nav>
+      <div className="mt-auto px-3 pb-4 pt-6">
+        <Link href="/about" aria-current={pathname === '/about' ? 'page' : undefined} onClick={() => setMenuOpen(false)} className={`flex h-10 items-center gap-3 rounded-xl px-3 text-[13px] ${pathname === '/about' ? 'bg-white text-[#19382e]' : 'text-[#637069] hover:bg-white/55'}`}>
+          <Info className="size-4" aria-hidden="true" />About Eidos
+        </Link>
+      </div>
     </>
   );
 

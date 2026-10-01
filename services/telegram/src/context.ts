@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import { knowledgePrompt } from './knowledge.js';
 import { config, profiles, type ProfileName } from './config.js';
 
 type MemoryResponse = {
@@ -21,7 +22,7 @@ function readIfExists(path: string): string {
   return readFileSync(path, 'utf-8').trim();
 }
 
-export async function buildPrompt(userText: string, profile: ProfileName, channel: 'telegram' | 'web' = 'telegram'): Promise<string> {
+export async function buildPrompt(userText: string, profile: ProfileName, channel: 'telegram' | 'web' = 'telegram', sourceRef?: string): Promise<string> {
   const root = config.workspacePath;
   const identity = readIfExists(resolve(root, 'shared/IDENTITY.md'));
   const profileIndex = readIfExists(resolve(root, 'shared/PROFILE_INDEX.md'));
@@ -29,7 +30,7 @@ export async function buildPrompt(userText: string, profile: ProfileName, channe
   const memory = readIfExists(resolve(root, `profiles/${profile}/MEMORY.md`));
   const history = readIfExists(resolve(root, `profiles/${profile}/HISTORY.md`));
   const profileInfo = profiles[profile];
-  const d1Memory = await readPersistentMemory(profile);
+  const [d1Memory, knowledge] = await Promise.all([readPersistentMemory(profile), knowledgePrompt()]);
 
   return [
     '# Eidos Runtime Context',
@@ -62,29 +63,14 @@ export async function buildPrompt(userText: string, profile: ProfileName, channe
     '- Keep memory writes short and grounded. Use daily history for dated events and persistent memory for durable facts. Mention the write briefly only when it helps; do not make it the main response.',
     '- When you update a tool or skill implementation, prompt instructions, private config, or tested status, update the D1 capability registry before finishing so the portal Updated timestamp stays accurate.',
     '',
-    '## Available Local Tools',
-    '- Message context: use `python3 ~/.eidos/services/messages/message_context.py --person "NAME" --limit 25` when message history, relationship context, recent texts, or an existing D1 summary would materially help the response. If the person is outside the current D1 cache, the tool falls back to the local Messages archive on the Mac mini.',
-    '- To see resolvable message conversations, use `python3 ~/.eidos/services/messages/message_context.py --list`.',
-    '- Messages overview summary: use `python3 ~/.eidos/services/messages/message_context.py --overview-summary --window-days 30 --overview-list-limit 20` when Andrew asks what has been going on across messages overall, not with one specific person.',
-    '- Message context defaults to 25 recent cached messages, but you can request more with `--limit N`, all cached D1 messages with `--all`, older ranges with `--since` / `--until`, pages with `--offset`, and chronological output with `--order asc`.',
-    '- Use the message context tool intentionally, not for every name mention. It is appropriate when Andrew asks you to pull texts/messages, asks about a specific person, appears conflicted about an interaction, or when recent message evidence would prevent guessing.',
-    '- The tool reads from Eidos D1, including message analytics, recent cached messages, and completed conversation summaries. It does not mutate Messages.',
-    '- Invoice generator: use `python3 ~/.eidos/services/invoices/create_invoice.py --client "CLIENT" --item "Description|hours|rate"` to create PDF invoices. The tool uses D1-backed per-client numbering when `--invoice-number` is omitted. Use `--set-next-number N --client "CLIENT"` to seed or correct a client counter. Ask for missing client, line item, rate, due terms, or address details only when needed. The command prints JSON with `pdf_path`; include that local PDF path in your response so Telegram can send the document.',
-    '- Calendar events: use `python3 ~/.eidos/services/calendar/add_event.py --title "TITLE" --start "YYYY-MM-DD HH:MM"` to add events to Apple Calendar. Default calendar is `Events Ambient`, for events Andrew may attend or wants visible but has not necessarily gone to. Use another calendar only if Andrew explicitly specifies one. For screenshots, extract event details from the image/caption first, ask only when title/date/time is genuinely ambiguous, then add the event. If the tool says Calendar access is denied, tell Andrew macOS Calendar permission is needed for `~/Applications/EidosCalendarWriter.app` on the Mac mini.',
-    '- Check-ins: `python3 ~/.eidos/services/checkins/send_checkin.py --kind morning --no-send` or `--kind evening --no-send` generates the scheduled check-in without sending it. The launchd service sends morning and evening check-ins to Telegram and records runs in D1. Use `--force` only for explicit manual sends/tests.',
-    '- Mantra context: the portal Mantra page stores Andrew’s current focus/intention in D1. Morning check-ins read it automatically; if Andrew asks about what he is focusing on or manifesting, use the portal/D1 Mantra context rather than guessing.',
-    '- Memory context: use `python3 ~/.eidos/services/memory/memory_context.py --recent`, `--date YYYY-MM-DD`, or `--search "NAME OR PHRASE"` to read portal memory. To write a selective daily history entry, use `python3 ~/.eidos/services/memory/memory_context.py --add-history --date YYYY-MM-DD --title "TITLE" --body "BODY" --source-label "Telegram conversation"`. To write durable profile memory, use `python3 ~/.eidos/services/memory/memory_context.py --add-note --profile personal --title "TITLE" --body "BODY" --source-label "Telegram conversation"`. To write a person note, use `python3 ~/.eidos/services/memory/memory_context.py --add-person-note --person "NAME" --body "BODY" --source-label "Telegram conversation"`.',
-    '- Style repository: use `python3 ~/.eidos/services/styles/style_context.py --list` to read captured aesthetics, effects, and components from the portal Style page. Save references with `--add --source-text "SOURCE"` plus optional `--kind`, `--url`, `--preview-url`, `--context`, `--notes`, `--tags`, and `--file-path`. Use a direct image URL for `--preview-url` when the card can show a meaningful visual example.',
-    '- Sources repository: use `python3 ~/.eidos/services/sources/source_context.py --list` to read books, films, artworks, articles, PDFs, images, and other references from the portal Sources page. Save references with `--add --source-text "SOURCE"` plus optional `--type`, `--context`, `--creator`, `--year`, `--url`, `--file-path`, `--preview-url`, and `--tags`. Sources are references Andrew may want to revisit, not persistent memory facts.',
-    '- Future events: use `python3 ~/.eidos/services/future/future_context.py --list` to read recurring events Andrew wants to catch in future years. Save one with `--add --name "EVENT"` plus any known `--url`, `--description`, `--location`, `--last-start`, `--last-end`, `--next-start`, `--next-end`, `--watch-month`, `--notes`, and `--tags`. Use this for annual conferences, festivals, fairs, and similar events where early discovery matters.',
-    '- Apple Music playlists: use `python3 ~/.eidos/services/music/apple_music_playlist.py --playlist "PLAYLIST" --song "TITLE|ARTIST"` to create playlists and add Apple Music catalog tracks through the dedicated signed-in Eidos Chrome/MusicKit profile. Use `--search "QUERY"` to check catalog matches. For images, extract song titles/artists first, then call this tool.',
-    '- Capability registry: use `python3 ~/.eidos/services/skills/update_capability.py --id "CAPABILITY_ID"` to touch the portal Updated timestamp. Include `--notes`, `--summary`, `--status`, or other fields when the behavior or tested state changed.',
+    knowledge,
     '',
     '## Current Conversation',
     channel === 'web'
       ? 'Andrew is talking to you in the Eidos web app. Reply directly here. Do not send this reply through Telegram. For memory provenance use "Eidos app conversation". Local file paths are not downloadable in this interface; do not claim to have attached a file.'
       : 'Andrew is talking to you through Telegram.',
     '',
+    sourceRef ? `Current conversation reference: ${sourceRef}` : 'Current conversation reference: Telegram conversation; include the date and original quote when saving feedback.',
     '## User Message',
     userText,
   ].join('\n');
