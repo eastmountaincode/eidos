@@ -29,8 +29,10 @@ test('file tickets are private, origin-scoped, content-bound and idempotent; lar
   const content = Buffer.alloc(5 * 1024 * 1024, 'a');
   const signed = await ticket('notes.txt', content);
   const upload = (body = content, site = origin, url = signed.upload_url) => mf.dispatchFetch(url, { method: 'PUT', headers: { Origin: site }, body });
-  assert.equal((await upload(content, 'https://wrong.example')).status, 401);
-  assert.equal((await upload(content, origin, signed.upload_url + 'tampered')).status, 401);
+  // Auth rejects before reading the body. Keep rejected requests small so the
+  // local HTTP transport can report 401 instead of resetting a large upload.
+  assert.equal((await upload(Buffer.from('unauthorized'), 'https://wrong.example')).status, 401);
+  assert.equal((await upload(Buffer.from('unauthorized'), origin, signed.upload_url + 'tampered')).status, 401);
   const preflight = await mf.dispatchFetch(signed.upload_url, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'PUT' } });
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), origin);
@@ -51,7 +53,7 @@ test('file tickets are private, origin-scoped, content-bound and idempotent; lar
   assert.equal(result.headers.get('X-Content-Type-Options'), 'nosniff');
   assert.match(result.headers.get('Content-Disposition'), /^attachment/);
   assert.equal(hash(Buffer.from(await result.arrayBuffer())), hash(content));
-  assert.equal((await mf.dispatchFetch(download, { method: 'PUT', headers: { Origin: origin }, body: content })).status, 401);
+  assert.equal((await mf.dispatchFetch(download, { method: 'PUT', headers: { Origin: origin }, body: Buffer.from('unauthorized') })).status, 401);
 });
 
 test('file-only turns persist immutable references; missing or modified files cannot be queued', async (t) => {
