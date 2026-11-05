@@ -1,11 +1,14 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { config, profiles, type ProfileName } from './config.js';
 import { buildPrompt } from './context.js';
+import { buildCodexArgs } from './codex-args.js';
+import type { ChatSettings } from '../../../shared/chat-settings.mjs';
 
 export type AgentResponse = {
   text: string;
   sessionId: string;
   error?: string;
+  usage?: Record<string, number>;
 };
 
 export type StreamCallback = (partialText: string) => Promise<void> | void;
@@ -18,6 +21,8 @@ type CodexJsonEvent = {
     text?: string;
   };
   message?: string;
+  error?: { message?: string };
+  usage?: Record<string, number>;
 };
 
 const activeQueries = new Map<string, ChildProcessWithoutNullStreams>();
@@ -63,13 +68,18 @@ export async function sendMessage(
     profile: ProfileName;
     resumeSessionId?: string;
     onPartialText?: StreamCallback;
+    channel?: 'telegram' | 'web';
+    sourceRef?: string;
+    retryTransient?: boolean;
+    settings?: ChatSettings;
+    images?: string[];
   },
 ): Promise<AgentResponse> {
   const queryKey = `${Date.now()}-${Math.random()}`;
 
   try {
     const response = await runCodex(prompt, opts, queryKey);
-    if (response.error && isTransientError(response.error)) {
+    if (opts.retryTransient !== false && response.error && isTransientError(response.error)) {
       console.log(`[codex] Transient error, retrying in 5s: ${response.error}`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
       return runCodex(prompt, opts, `${queryKey}-retry`);
@@ -77,7 +87,7 @@ export async function sendMessage(
     return response;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    if (isTransientError(errMsg)) {
+    if (opts.retryTransient !== false && isTransientError(errMsg)) {
       console.log(`[codex] Transient error, retrying in 5s: ${errMsg}`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
       return runCodex(prompt, opts, `${queryKey}-retry`);
@@ -92,11 +102,15 @@ async function runCodex(
     profile: ProfileName;
     resumeSessionId?: string;
     onPartialText?: StreamCallback;
+    channel?: 'telegram' | 'web';
+    sourceRef?: string;
+    settings?: ChatSettings;
+    images?: string[];
   },
   queryKey: string,
 ): Promise<AgentResponse> {
-  const args = buildArgs(opts.resumeSessionId);
-  const runtimePrompt = await buildPrompt(prompt, opts.profile);
+  const args = buildCodexArgs({ ...opts, defaultModel: config.codex.model, workspacePath: config.workspacePath });
+  const runtimePrompt = await buildPrompt(prompt, opts.profile, opts.channel, opts.sourceRef);
   const resumed = Boolean(opts.resumeSessionId);
   console.log(`[codex] Starting ${resumed ? 'resume' : 'new'} query (${queryKey})`);
   const child = spawn(config.codex.binary, args, {
@@ -110,6 +124,7 @@ async function runCodex(
   let stderr = '';
   let sessionId = opts.resumeSessionId ?? '';
   let fullText = '';
+  let usage: Record<string, number> | undefined;
   let timedOut = false;
   let forceKillTimer: NodeJS.Timeout | undefined;
   const timeoutTimer = config.codex.timeoutMs > 0
@@ -137,6 +152,7 @@ async function runCodex(
       if (event.type === 'thread.started' && event.thread_id) {
         sessionId = event.thread_id;
       }
+      if (event.type === 'turn.completed' && event.usage) usage = event.usage;
 
       if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
         fullText = event.item.text ?? fullText;
@@ -151,6 +167,9 @@ async function runCodex(
 
       if (event.type === 'error' && event.message) {
         stderr += `${event.message}\n`;
+      }
+      if (event.type === 'turn.failed' && event.error?.message) {
+        stderr += `${event.error.message}\n`;
       }
     }
   });
@@ -176,6 +195,7 @@ async function runCodex(
 
   if (stdout.trim()) {
     const event = parseEvent(stdout.trim());
+    if (event?.type === 'turn.completed' && event.usage) usage = event.usage;
     if (event?.type === 'item.completed' && event.item?.type === 'agent_message') {
       fullText = event.item.text ?? fullText;
     }
@@ -196,25 +216,7 @@ async function runCodex(
     return { text: fullText, sessionId: fullText ? sessionId : '', error };
   }
 
-  return { text: fullText, sessionId };
-}
-
-function buildArgs(resumeSessionId?: string): string[] {
-  const common = [
-    '--json',
-    '--skip-git-repo-check',
-    '--dangerously-bypass-approvals-and-sandbox',
-  ];
-
-  if (config.codex.model) {
-    common.push('--model', config.codex.model);
-  }
-
-  if (resumeSessionId) {
-    return ['exec', 'resume', ...common, resumeSessionId, '-'];
-  }
-
-  return ['exec', ...common, '--cd', config.workspacePath, '-'];
+  return { text: fullText, sessionId, usage };
 }
 
 function parseEvent(line: string): CodexJsonEvent | undefined {

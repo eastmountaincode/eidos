@@ -1,0 +1,21 @@
+.eidos-v2 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.eidos-v2-wordmark {
+  font-family: "Vaxen Rounded", "VaxenRounded", Arial, sans-serif;
+  font-weight: 750;
+}
+
+.eidos-v2-scroll {
+  scrollbar-color: #c7c7c7 transparent;
+  scrollbar-width: thin;
+}
+
+.eidos-v2-textarea {
+  field-sizing: content;
+}
+
+.eidos-v2-composer {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}

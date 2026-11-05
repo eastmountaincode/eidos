@@ -1,0 +1,2 @@
+# Installed into runtime/message-wake, not global/system Python.
+websocket-client==1.8.0

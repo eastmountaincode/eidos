@@ -46,7 +46,14 @@ python3 ~/.eidos/services/messages/process_summary_jobs.py
 python3 ~/.eidos/services/messages/process_summary_jobs.py --daemon --wait-timeout 300
 ```
 
-The portal queues ingest and summary requests in D1. The Mac mini worker drains queued jobs, then waits on `/api/messages/jobs/wait`; when the portal creates a new job, the Cloudflare Worker wakes the waiting Mac mini process immediately. Summary jobs extract the requested conversation window from local `chat.db`, run `codex exec`, and write the completed summary back to D1.
+The portal queues ingest and summary requests in D1. The Mac mini subscribes to
+`/api/messages/jobs/connect` over an authenticated hibernating WebSocket, then
+drains queued jobs. New jobs wake it immediately. All waiting/keepalive/retry
+timers run locally, not inside the Durable Object. Startup, reconnection and a
+300-second fallback recheck D1 so dropped notifications cannot strand jobs.
+Summary jobs extract the requested conversation window from local `chat.db`, run
+`codex exec`, and write the completed summary back to D1. Install the isolated
+WebSocket dependency and updated LaunchAgent as described in `docs/web-chat.md`.
 
 Agent retrieval:
 

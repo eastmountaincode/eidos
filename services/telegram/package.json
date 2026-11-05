@@ -5,16 +5,19 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
+    "start:web": "tsx src/web-chat.ts",
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@grammyjs/runner": "^2.0.3",
     "dotenv": "^16.4.7",
-    "grammy": "^1.35.0"
+    "grammy": "^1.35.0",
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/ws": "8.18.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

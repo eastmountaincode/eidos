@@ -8,12 +8,6 @@ const repoRoot = resolve(__dirname, '../../..');
 loadEnv({ path: resolve(repoRoot, '.env') });
 loadEnv({ path: resolve(__dirname, '../.env') });
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
-  return value;
-}
-
 function optionalEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value ? value : undefined;
@@ -25,9 +19,9 @@ function nonNegativeNumberEnv(name: string, fallback: number): number {
 }
 
 export const config = {
-  telegramBotToken: requireEnv('TELEGRAM_BOT_TOKEN'),
-  telegramChatId: requireEnv('TELEGRAM_CHAT_ID'),
-  allowedUserIds: new Set([requireEnv('TELEGRAM_CHAT_ID')]),
+  telegramBotToken: optionalEnv('TELEGRAM_BOT_TOKEN') || '',
+  telegramChatId: optionalEnv('TELEGRAM_CHAT_ID') || '',
+  allowedUserIds: new Set([optionalEnv('TELEGRAM_CHAT_ID') || '']),
   workspacePath: resolve(process.env.EIDOS_HOME || repoRoot),
   codex: {
     binary: process.env.CODEX_BINARY || '/opt/homebrew/bin/codex',

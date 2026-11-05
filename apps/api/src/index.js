@@ -1,3 +1,7 @@
+import { handleAgentChat } from './agent-chat.mjs';
+import { handleChatFiles } from './chat-files.mjs';
+import { handleAgentKnowledge, readCapabilities } from './agent-knowledge.mjs';
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -30,14 +34,37 @@ export class MessageJobWake {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    this.waiters = new Set();
+    this.lastSeen = 0;
+    // The runtime answers keepalives without waking the object or running a timer.
+    this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
   async fetch(request) {
     const url = new URL(request.url);
 
-    if (request.method === 'GET' && url.pathname === '/wait') {
-      return this.wait(url);
+    if (request.method === 'POST' && url.pathname === '/heartbeat') {
+      this.lastSeen = Date.now();
+      return json({ online: true });
+    }
+    if (request.method === 'GET' && url.pathname === '/status') {
+      const online = this.state.getWebSockets().some((ws) => {
+        const seen = this.state.getWebSocketAutoResponseTimestamp(ws)?.getTime()
+          || ws.deserializeAttachment()?.connectedAt || 0;
+        return ws.readyState === WebSocket.OPEN && Date.now() - seen < 90000;
+      });
+      return json({ online: online || Date.now() - this.lastSeen < 90000,
+        connections: this.state.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN).length,
+        transport: 'hibernating-websocket' });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/connect') {
+      if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+        return json({ error: 'WebSocket upgrade required' }, 426);
+      }
+      const { 0: client, 1: server } = new WebSocketPair();
+      this.state.acceptWebSocket(server);
+      server.serializeAttachment({ connectedAt: Date.now() });
+      return new Response(null, { status: 101, webSocket: client });
     }
 
     if (request.method === 'POST' && url.pathname === '/wake') {
@@ -48,41 +75,33 @@ export class MessageJobWake {
     return json({ error: 'not found' }, 404);
   }
 
-  wait(url) {
-    const timeoutSeconds = Math.min(Math.max(Number(url.searchParams.get('timeout') || 300), 1), 300);
+  webSocketMessage(ws) {
+    // Only the runtime's ping/pong auto-response is part of the client protocol.
+    ws.close(1008, 'Unsupported message');
+  }
 
-    return new Promise((resolve) => {
-      const waiter = {
-        resolve,
-        timeout: setTimeout(() => {
-          this.waiters.delete(waiter);
-          resolve(json({
-            woken: false,
-            reason: 'timeout',
-            waited_seconds: timeoutSeconds,
-            returned_at: new Date().toISOString(),
-          }));
-        }, timeoutSeconds * 1000),
-      };
-      this.waiters.add(waiter);
-    });
+  webSocketClose(ws, code) {
+    ws.close(code === 1005 ? 1000 : code);
+  }
+
+  webSocketError(ws) {
+    ws.close(1011, 'Connection error');
   }
 
   wake(reason) {
-    const waiters = Array.from(this.waiters);
-    this.waiters.clear();
+    let notified = 0;
     const payload = {
       woken: true,
       reason,
       woken_at: new Date().toISOString(),
     };
 
-    for (const waiter of waiters) {
-      clearTimeout(waiter.timeout);
-      waiter.resolve(json(payload));
+    for (const ws of this.state.getWebSockets()) {
+      try { ws.send(JSON.stringify(payload)); notified++; }
+      catch { try { ws.close(1011, 'Reconnect'); } catch {} }
     }
 
-    return json({ ...payload, waiters: waiters.length });
+    return json({ ...payload, waiters: notified });
   }
 }
 
@@ -90,9 +109,17 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    const fileResponse = await handleChatFiles(request, env);
+    if (fileResponse) return fileResponse;
+
     if (!requireAuth(request, env)) {
       return unauthorized();
     }
+
+    const chatResponse = await handleAgentChat(request, env);
+    if (chatResponse) return chatResponse;
+    const knowledgeResponse = await handleAgentKnowledge(request, env);
+    if (knowledgeResponse) return knowledgeResponse;
 
     if (request.method === 'GET' && url.pathname === '/api/messages/overview') {
       return getMessagesOverview(env, url);
@@ -220,7 +247,13 @@ export default {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/messages/jobs/wait') {
-      return waitForMessageJobs(env, url);
+      return json({ error: 'Use /api/messages/jobs/connect; long polling is retired.' }, 410);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/messages/jobs/connect') {
+      const stub = messageJobWakeStub(env);
+      return stub ? stub.fetch(new Request('https://message-job-wake/connect', request))
+        : json({ error: 'Wake channel is not configured' }, 503);
     }
 
     if (request.method === 'POST' && url.pathname === '/api/messages/summary-request') {
@@ -281,24 +314,7 @@ export default {
 };
 
 async function getCapabilities(env) {
-  const capabilities = await env.DB.prepare(`
-    SELECT
-      id,
-      kind,
-      name,
-      status,
-      category,
-      summary,
-      invocation,
-      data_source,
-      notes,
-      sort_order,
-      updated_at
-    FROM agent_capabilities
-    ORDER BY kind ASC, sort_order ASC, name ASC
-  `).all();
-
-  return json({ capabilities: capabilities.results });
+  return json({ capabilities: await readCapabilities(env) });
 }
 
 async function getStyleEntries(env, url) {
@@ -1387,16 +1403,6 @@ function parseLimit(value, defaultValue) {
   return Math.max(Math.floor(parsed), 1);
 }
 
-
-async function waitForMessageJobs(env, url) {
-  const stub = messageJobWakeStub(env);
-  if (!stub) {
-    return json({ error: 'message job wake channel is not configured' }, 503);
-  }
-
-  const timeout = Math.min(Math.max(Number(url.searchParams.get('timeout') || 300), 1), 300);
-  return stub.fetch(new Request(`https://message-job-wake/wait?timeout=${timeout}`, { method: 'GET' }));
-}
 
 async function wakeMessageJobs(env, reason) {
   const stub = messageJobWakeStub(env);

@@ -5,7 +5,7 @@ function LoginForm({ error }: { error: string | null }) {
     <main className="grid min-h-screen place-items-center bg-bg p-4 text-ink">
       <section className="w-full max-w-[360px]">
         <h1
-          className="mx-auto mb-6 w-full text-center text-[54px] font-bold leading-none text-sidebar"
+          className="mx-auto mb-6 w-full text-center text-[54px] font-bold leading-none tracking-[-0.035em] text-sidebar"
           style={{ fontFamily: "\"Vaxen Rounded\", \"VaxenRounded\", ui-sans-serif, system-ui, sans-serif" }}
         >
           Eidos
