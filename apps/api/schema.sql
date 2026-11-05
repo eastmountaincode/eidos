@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS message_sync_runs (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE INDEX IF NOT EXISTS idx_message_sync_runs_exported_at ON message_sync_runs(exported_at DESC);
+
 CREATE TABLE IF NOT EXISTS message_conversations (
   conversation_key TEXT PRIMARY KEY,
   display_name TEXT NOT NULL,
