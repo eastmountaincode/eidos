@@ -80,7 +80,7 @@ export function SourcesLibrary({ entries }: { entries: SourceEntry[] }) {
               </div>
               {(entry.creator || entry.year) && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {[entry.creator, entry.year].filter(Boolean).join(" · ")}
+                  {[entry.creator, entry.year].filter(Boolean).join(" / ")}
                 </p>
               )}
               {entry.context && (

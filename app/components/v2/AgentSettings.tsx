@@ -75,7 +75,7 @@ export function AgentSettings() {
               Retry
             </Button>
           ) : (
-            "Loading…"
+            "Loading"
           )}
         </div>
       ) : (
@@ -155,10 +155,6 @@ export function AgentSettings() {
                   {data.runtime.observed_at.replace("T", " ").slice(0, 19)} UTC
                 </dd>
               </dl>
-              <p className="text-xs text-muted-foreground">
-                Connection status does not verify individual abilities. The
-                original production site is separate.
-              </p>
             </TabsContent>
           </Tabs>
         </>
@@ -181,7 +177,7 @@ function CapabilityRow({ capability: c }: { capability: Capability }) {
         <span className="min-w-0">
           <span className="block font-medium">{c.name}</span>
           <span className="mt-1 block text-xs font-normal text-muted-foreground">
-            Declared {readable(c.status)} ·{" "}
+            Declared {readable(c.status)} /{" "}
             {c.last_check
               ? `Check ${c.last_check.result}, ${day(c.last_check.checked_at)}`
               : "No dated check recorded"}
@@ -207,7 +203,7 @@ function CapabilityRow({ capability: c }: { capability: Capability }) {
         {c.last_check && (
           <div>
             <h3 className="mb-1 text-xs font-medium text-muted-foreground">
-              Last verification · {day(c.last_check.checked_at)}
+              Last verification / {day(c.last_check.checked_at)}
             </h3>
             <p>{c.last_check.evidence}</p>
           </div>
@@ -322,7 +318,7 @@ function FeedbackPanel() {
               <span>
                 <span className="block">{row.title}</span>
                 <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                  {row.kind} · {row.scope} · {row.status}
+                  {row.kind} / {row.scope} / {row.status}
                 </span>
               </span>
             </AccordionTrigger>
@@ -334,7 +330,7 @@ function FeedbackPanel() {
                 </blockquote>
               )}
               <p className="break-words text-xs text-muted-foreground">
-                Source: {row.source_ref} · {day(row.created_at)}
+                Source: {row.source_ref} / {day(row.created_at)}
               </p>
               {row.resolution && (
                 <p>
@@ -359,7 +355,7 @@ function FeedbackPanel() {
       </Accordion>
       {loading && (
         <p role="status" className="py-4 text-sm text-muted-foreground">
-          Loading feedback…
+          Loading feedback
         </p>
       )}
       {!loading && !visible.length && !error && (
@@ -507,7 +503,7 @@ function FeedbackForm({
       )}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={busy}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? "Saving" : "Save"}
         </Button>
         <Button
           type="button"
@@ -569,7 +565,7 @@ function RevisionHistory({ id, revision }: { id: string; revision: number }) {
             <li key={h.revision}>
               <Badge variant="outline">Revision {h.revision}</Badge>
               <span className="ml-2">
-                {day(h.recorded_at)} · {h.snapshot.status}
+                {day(h.recorded_at)} / {h.snapshot.status}
               </span>
               <p className="mt-1">{h.snapshot.title}</p>
               <p>{h.snapshot.body}</p>

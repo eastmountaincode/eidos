@@ -1,10 +1,11 @@
 "use client";
 
 import { ArrowLeft, RefreshCw, Search } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type {
   Conversation,
   ConversationDetail,
+  ConversationSummary,
   MessageViewSummary,
   MessagesOverview,
   SummaryWindow,
@@ -29,8 +30,9 @@ const summaryWindows: { value: SummaryWindow; label: string }[] = [
 
 async function readJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: "no-store", ...init });
-  if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  return response.json() as Promise<T>;
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+  return data as T;
 }
 
 function overviewUrl(days: WindowDays) {
@@ -43,7 +45,7 @@ function detailUrl(key: string) {
 
 function date(value?: string | null) {
   if (!value) return "—";
-  const parsed = new Date(value);
+  const parsed = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString([], {
     month: "short",
@@ -53,7 +55,7 @@ function date(value?: string | null) {
 
 function time(value?: string | null) {
   if (!value) return "—";
-  const parsed = new Date(value);
+  const parsed = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleString([], {
     month: "short",
@@ -165,11 +167,11 @@ export function MessagesWorkspace() {
     };
   }, [ingestStatus, syncing, windowDays]);
 
-  const detailSummaryStatus = detail?.summaries?.[0]?.status;
+  const detailSummaryStatus = detail?.summaries?.some(s => s.status === "queued" || s.status === "running");
   useEffect(() => {
     if (
       !selectedKey ||
-      (detailSummaryStatus !== "queued" && detailSummaryStatus !== "running")
+      !detailSummaryStatus
     )
       return;
     const interval = window.setInterval(() => {
@@ -177,7 +179,9 @@ export function MessagesWorkspace() {
         .then((value) => {
           if (selection.current === selectedKey) setDetail(value);
         })
-        .catch((reason) => setDetailError(String(reason)));
+        .catch((reason) => {
+          if (selection.current === selectedKey) setDetailError(String(reason));
+        });
     }, 3000);
     return () => window.clearInterval(interval);
   }, [detailSummaryStatus, selectedKey]);
@@ -217,12 +221,22 @@ export function MessagesWorkspace() {
 
   useEffect(() => {
     setViewSummary(null);
+    setRequestingViewSummary(false);
     setSummaryError("");
-  }, [keySignature, windowDays]);
+    if (!showOverview || !keySignature) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ window_days: String(windowDays), list_limit: "all" });
+    keySignature.split("\n").forEach(key => params.append("conversation_key", key));
+    readJson<{ summary: MessageViewSummary | null }>(`/api/message-view-summary?${params}`, { signal: controller.signal })
+      .then(value => setViewSummary(value.summary))
+      .catch(reason => { if (!controller.signal.aborted) setSummaryError(String(reason)); });
+    return () => controller.abort();
+  }, [keySignature, windowDays, showOverview]);
 
   useEffect(() => {
     if (viewSummaryStatus !== "queued" && viewSummaryStatus !== "running")
       return;
+    let cancelled = false;
     const interval = window.setInterval(() => {
       const keys = keySignature ? keySignature.split("\n") : [];
       const params = new URLSearchParams({
@@ -234,6 +248,7 @@ export function MessagesWorkspace() {
         `/api/message-view-summary?${params}`,
       )
         .then(({ summary }) => {
+          if (cancelled) return;
           setViewSummary(summary);
           if (
             !summary ||
@@ -243,11 +258,12 @@ export function MessagesWorkspace() {
             setRequestingViewSummary(false);
         })
         .catch((reason) => {
+          if (cancelled) return;
           setSummaryError(String(reason));
           setRequestingViewSummary(false);
         });
     }, 3000);
-    return () => window.clearInterval(interval);
+    return () => { cancelled = true; window.clearInterval(interval); };
   }, [keySignature, viewSummaryStatus, windowDays]);
 
   async function syncMessages() {
@@ -320,6 +336,13 @@ export function MessagesWorkspace() {
   const selectedConversation = overview?.topConversations.find(
     (item) => item.conversation_key === selectedKey,
   );
+  function contactSaved(conversation: Conversation) {
+    const fields = { display_name: conversation.display_name, custom_name: conversation.custom_name, imported_name: conversation.imported_name };
+    setOverview(previous => previous ? { ...previous, topConversations: previous.topConversations.map(row =>
+      row.conversation_key === conversation.conversation_key ? { ...row, ...fields } : row) } : previous);
+    setDetail(previous => previous?.conversation.conversation_key === conversation.conversation_key
+      ? { ...previous, conversation: { ...previous.conversation, ...fields } } : previous);
+  }
   const paneOpen = Boolean(selectedKey) || showOverview;
 
   return (
@@ -414,7 +437,7 @@ export function MessagesWorkspace() {
             </label>
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>
-                {loading ? "Loading…" : `${conversations.length} conversations`}
+                {loading ? "Loading" : `${conversations.length} ${conversations.length === 1 ? "conversation" : "conversations"}`}
               </span>
               <NativeSelect
                 aria-label="Sort conversations"
@@ -431,7 +454,7 @@ export function MessagesWorkspace() {
           <div className="eidos-v2-scroll min-h-0 flex-1 overflow-y-auto">
             {loading && !overview ? (
               <p role="status" className="p-4 text-xs text-muted-foreground">
-                Loading conversations…
+                Loading conversations
               </p>
             ) : !overview ? (
               <Button
@@ -467,7 +490,7 @@ export function MessagesWorkspace() {
                       </span>
                       <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">
                         {number.format(Number(conversation.sent_count || 0))}{" "}
-                        sent ·{" "}
+                        sent /{" "}
                         {number.format(
                           Number(conversation.received_count || 0),
                         )}{" "}
@@ -490,7 +513,7 @@ export function MessagesWorkspace() {
               className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground"
               role="status"
             >
-              {isSyncing ? "Syncing…" : `Synced ${time(run.exported_at)}`}
+              {isSyncing ? "Syncing" : `Synced ${time(run.exported_at)}`}
               {ingestStatus === "stale" && (
                 <span className="mt-0.5 block text-destructive">
                   Manual sync request needs attention
@@ -522,15 +545,15 @@ export function MessagesWorkspace() {
           {selectedKey ? (
             <>
               <div className="border-b border-border px-5 py-3">
-                <h2 className="truncate text-sm font-semibold">
-                  {selectedConversation
-                    ? name(selectedConversation)
-                    : "Conversation"}
-                </h2>
+                {selectedConversation ? <ContactNameEditor
+                  key={selectedKey}
+                  conversation={detail?.conversation.conversation_key === selectedKey ? detail.conversation : selectedConversation}
+                  onSaved={contactSaved}
+                /> : <h2 className="text-sm font-semibold">Conversation</h2>}
                 {selectedConversation && (
                   <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                     {number.format(selectedConversation.message_count)} messages
-                    · {number.format(selectedConversation.sent_count)} sent ·{" "}
+                    / {number.format(selectedConversation.sent_count)} sent /{" "}
                     {number.format(selectedConversation.received_count)}{" "}
                     received
                   </p>
@@ -538,7 +561,7 @@ export function MessagesWorkspace() {
               </div>
               {detailLoading && (
                 <p role="status" className="p-5 text-xs text-muted-foreground">
-                  Loading conversation…
+                  Loading conversation
                 </p>
               )}
               {detailError && (
@@ -562,12 +585,12 @@ export function MessagesWorkspace() {
             <div className="eidos-v2-scroll overflow-y-auto p-5">
               <h2 className="text-sm font-semibold">Overview</h2>
               <p className="mt-2 text-xs tabular-nums text-muted-foreground">
-                {number.format(visibleTotal)} messages · {conversations.length}{" "}
-                conversations · {number.format(visibleSent)} sent ·{" "}
+                {number.format(visibleTotal)} messages / {conversations.length}{" "}
+                conversations / {number.format(visibleSent)} sent /{" "}
                 {number.format(visibleReceived)} received
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {query ? `Matching “${query}” · ` : ""}Last {windowDays} days
+                {query ? `Matching “${query}” / ` : ""}Last {windowDays} days
               </p>
               <div className="mt-6 flex items-center justify-between border-b border-border pb-2">
                 <h3 className="text-xs font-medium">Summary</h3>
@@ -583,7 +606,7 @@ export function MessagesWorkspace() {
                   }
                   onClick={summarizeView}
                 >
-                  {requestingViewSummary ? "Summarizing…" : "Summarize view"}
+                  {requestingViewSummary ? "Summarizing" : "Summarize view"}
                 </Button>
               </div>
               {summaryError && (
@@ -591,11 +614,7 @@ export function MessagesWorkspace() {
                   {summaryError}
                 </p>
               )}
-              <SummaryText
-                status={viewSummary?.status}
-                summary={viewSummary?.summary}
-                themes={viewSummary?.themes}
-              />
+              <SummaryText record={viewSummary} />
             </div>
           ) : (
             <div className="grid flex-1 place-items-center">
@@ -623,7 +642,7 @@ function ConversationPanel({
   summaryWindow: SummaryWindow;
   setSummaryWindow: (value: SummaryWindow) => void;
 }) {
-  const latest = detail.summaries?.[0];
+  const latest = detail.summaries?.find(summary => summary.window_type === summaryWindow);
   return (
     <Tabs
       defaultValue="messages"
@@ -699,14 +718,10 @@ function ConversationPanel({
             }
             onClick={onSummarize}
           >
-            {requesting ? "Requesting…" : "Summarize"}
+            {requesting ? "Requesting" : latest?.status === "failed" ? "Retry summary" : latest?.status === "completed" ? "Summarize again" : "Summarize"}
           </Button>
         </div>
-        <SummaryText
-          status={latest?.status}
-          summary={latest?.summary}
-          themes={latest?.themes}
-        />
+        <SummaryText record={latest} />
         {latest?.relationship_notes && (
           <p className="mt-4 whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">
             {latest.relationship_notes}
@@ -717,39 +732,79 @@ function ConversationPanel({
   );
 }
 
-function SummaryText({
-  status,
-  summary,
-  themes,
-}: {
-  status?: "queued" | "running" | "completed" | "failed";
-  summary?: string | null;
-  themes?: string[];
-}) {
-  if (!status) return null;
+function SummaryText({ record }: { record?: ConversationSummary | MessageViewSummary | null }) {
+  if (!record) return <p className="mt-4 text-xs text-muted-foreground">No summary for this window.</p>;
+  const { status, summary, themes } = record;
   if (status !== "completed")
     return (
-      <p
+      <div
         role="status"
         className={`mt-4 text-xs ${status === "failed" ? "text-destructive" : "text-muted-foreground"}`}
       >
-        {status === "failed"
-          ? "Summary failed."
+        <p>{status === "failed"
+          ? record.error || "Summary failed. Please try again."
           : status === "queued"
-            ? "Queued…"
-            : "Summarizing…"}
-      </p>
+            ? "Waiting for the agent"
+            : "Summarizing"}</p>
+        <p className="mt-2 text-muted-foreground">Requested {time(record.requested_at)}</p>
+      </div>
     );
   return (
     <div className="mt-4">
+      <p className="mb-3 text-xs text-muted-foreground">Updated {time(record.generated_at)}</p>
       <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
         {summary || "No summary text."}
       </p>
       {themes?.length ? (
         <p className="mt-4 text-xs text-muted-foreground">
-          {themes.join(" · ")}
+          {themes.join(" / ")}
         </p>
       ) : null}
+      <p className="mt-4 text-xs text-muted-foreground">
+        {number.format(record.message_count || 0)} messages from {date(record.source_start_at)} to {date(record.source_end_at)}
+      </p>
+    </div>
+  );
+}
+
+function ContactNameEditor({ conversation, onSaved }: { conversation: Conversation; onSaved: (value: Conversation) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save(displayName: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await readJson<{ conversation: Conversation }>("/api/message-contact", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_key: conversation.conversation_key, display_name: displayName }),
+      });
+      onSaved(result.conversation);
+      setEditing(false);
+    } catch (reason) { setError((reason as Error).message); }
+    finally { setBusy(false); }
+  }
+  function submit(event: FormEvent) { event.preventDefault(); if (value.trim()) void save(value.trim()); }
+  return editing ? (
+    <form onSubmit={submit} className="space-y-2">
+      <label className="grid gap-1.5 text-xs">
+        {conversation.chat_type === "group" ? "Conversation name" : "Contact name"}
+        <Input autoFocus value={value} maxLength={120} required disabled={busy}
+          onChange={event => setValue(event.target.value)} className="h-8 max-w-sm" />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" type="submit" disabled={busy || !value.trim()}>{busy ? "Saving" : "Save"}</Button>
+        <Button size="sm" variant="ghost" type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</Button>
+        {conversation.custom_name && <Button size="sm" variant="ghost" type="button" disabled={busy} onClick={() => void save("")}>Use imported name</Button>}
+      </div>
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+    </form>
+  ) : (
+    <div className="flex min-w-0 items-center gap-3">
+      <h2 className="truncate text-sm font-semibold">{name(conversation)}</h2>
+      <Button size="sm" variant="ghost" className="h-7 shrink-0 text-xs text-muted-foreground"
+        onClick={() => { setValue(conversation.custom_name || name(conversation)); setError(""); setEditing(true); }}>Edit name</Button>
     </div>
   );
 }

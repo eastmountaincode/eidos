@@ -23,6 +23,8 @@ export type MessageIngestRequest = {
 export type Conversation = {
   conversation_key: string;
   display_name: string;
+  custom_name?: string | null;
+  imported_name?: string;
   handle?: string | null;
   chat_type?: string | null;
   message_count: number;

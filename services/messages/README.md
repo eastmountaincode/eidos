@@ -73,3 +73,15 @@ Known hard parts:
 - attachment handling
 - spam/verification-code filtering
 - sync freshness
+
+Contact names edited in the portal are stored in `message_contact_names`, separate
+from imported names. A sync preserves them; “Use imported name” removes the
+portal override. Apply `apps/api/message_contact_names.sql` before deploying
+this version of the Worker. It is an additive, idempotent migration.
+
+Summaries run only after an explicit request. The portal reads existing status
+when opening a tab, shows the selected summary window, and lets the user retry a
+job interrupted for more than 15 minutes. The worker uses `gpt-6-luna` by default;
+`EIDOS_SUMMARY_MODEL` or `--codex-model` can override it with a model available to
+the mini's Codex account. Empty time windows fail instead of silently expanding
+the requested dates. Job error records must not contain captured transcripts.

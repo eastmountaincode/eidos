@@ -17,7 +17,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { AgentSettings } from "./AgentSettings";
 
 const sections = [
   { href: "/", label: "Chat", Icon: MessageCircle },
@@ -28,7 +27,6 @@ const sections = [
 export function EidosShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const wordmark = (
     <Link
       aria-label="Eidos"
@@ -56,19 +54,15 @@ export function EidosShell({ children }: { children: ReactNode }) {
         ))}
       </nav>
       <div className="mt-auto p-2">
-        <Button
-          data-settings-trigger
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2.5 rounded-sm px-2 text-[13px] font-normal text-muted-foreground"
-          onClick={() => {
-            setMenuOpen(false);
-            setSettingsOpen(true);
-          }}
+        <Link
+          href="/settings"
+          aria-current={pathname === "/settings" ? "page" : undefined}
+          className={`flex h-8 items-center gap-2.5 rounded-sm px-2 text-[13px] ${pathname === "/settings" ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"}`}
+          onClick={() => setMenuOpen(false)}
         >
           <Settings2 className="size-4" strokeWidth={1.5} />
           Settings
-        </Button>
+        </Link>
       </div>
     </>
   );
@@ -103,40 +97,16 @@ export function EidosShell({ children }: { children: ReactNode }) {
             <Menu className="size-4" />
           </Button>
           {wordmark}
-          <Button
-            data-settings-trigger
+          <Link
+            href="/settings"
             aria-label="Settings"
-            className="ml-auto"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setSettingsOpen(true)}
+            className="ml-auto grid size-8 place-items-center rounded-sm hover:bg-accent"
           >
             <Settings2 className="size-4" />
-          </Button>
+          </Link>
         </header>
         <main className="min-h-0 min-w-0 flex-1">{children}</main>
       </div>
-      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <SheetContent
-          className="eidos-settings w-full gap-0 sm:max-w-[480px]"
-          aria-describedby={undefined}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            Array.from(
-              document.querySelectorAll<HTMLButtonElement>(
-                "[data-settings-trigger]",
-              ),
-            )
-              .find((button) => button.getClientRects().length)
-              ?.focus();
-          }}
-        >
-          <SheetHeader className="h-12 shrink-0 justify-center border-b border-border py-0">
-            <SheetTitle className="text-sm">Settings</SheetTitle>
-          </SheetHeader>
-          {settingsOpen && <AgentSettings />}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

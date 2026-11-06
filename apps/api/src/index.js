@@ -246,6 +246,10 @@ export default {
       return getConversationDetail(env, url);
     }
 
+    if (request.method === 'PATCH' && url.pathname === '/api/messages/contact-name') {
+      return updateContactName(env, await request.json());
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/messages/jobs/wait') {
       return json({ error: 'Use /api/messages/jobs/connect; long polling is retired.' }, 410);
     }
@@ -1213,7 +1217,7 @@ async function getMessagesOverview(env, url) {
     status: latestRun ? 'active' : 'pending',
     latestRun: overview.run,
     latestIngestRequest,
-    topConversations: overview.conversations,
+    topConversations: await withContactNames(env, overview.conversations),
   });
 }
 
@@ -1306,7 +1310,34 @@ async function getMessageConversations(env, url) {
     ${limitClause}
   `).bind(...bindings).all();
 
-  return json({ conversations: conversations.results });
+  return json({ conversations: await withContactNames(env, conversations.results) });
+}
+
+async function withContactNames(env, rows) {
+  if (!rows.length) return rows;
+  const saved = await env.DB.prepare('SELECT conversation_key, display_name FROM message_contact_names').all();
+  const names = new Map(saved.results.map(row => [row.conversation_key, row.display_name]));
+  return rows.map(row => ({ ...row, imported_name: row.display_name,
+    custom_name: names.get(row.conversation_key) || null,
+    display_name: names.get(row.conversation_key) || row.display_name }));
+}
+
+async function updateContactName(env, payload) {
+  const key = typeof payload.conversation_key === 'string' ? payload.conversation_key : '';
+  const value = typeof payload.display_name === 'string' ? payload.display_name.trim() : null;
+  if (!key || value === null || value.length > 120 || /[\u0000-\u001f\u007f]/.test(value)) {
+    return json({ error: 'Enter a name of at most 120 characters.' }, 400);
+  }
+  const conversation = await env.DB.prepare('SELECT * FROM message_conversations WHERE conversation_key = ?').bind(key).first();
+  if (!conversation) return json({ error: 'Conversation not found.' }, 404);
+  if (value) {
+    await env.DB.prepare(`INSERT INTO message_contact_names (conversation_key, display_name) VALUES (?, ?)
+      ON CONFLICT(conversation_key) DO UPDATE SET display_name = excluded.display_name, updated_at = datetime('now')`)
+      .bind(key, value).run();
+  } else {
+    await env.DB.prepare('DELETE FROM message_contact_names WHERE conversation_key = ?').bind(key).run();
+  }
+  return json({ conversation: (await withContactNames(env, [conversation]))[0] });
 }
 
 async function getConversationDetail(env, url) {
@@ -1390,7 +1421,7 @@ async function getConversationDetail(env, url) {
   `).bind(conversationKey).all();
 
   return json({
-    conversation,
+    conversation: (await withContactNames(env, [conversation]))[0],
     recentMessages: recent.results,
     summaries: summaries.results.map(normalizeSummary),
   });
@@ -1443,6 +1474,8 @@ async function requestSummary(env, payload) {
     return json({ error: 'conversation not found' }, 404);
   }
 
+  await expireSummaryJobs(env, 'conversation_summaries', 'conversation_key', conversationKey);
+  const namedConversation = (await withContactNames(env, [conversation]))[0];
   const existing = await env.DB.prepare(`
     SELECT *
     FROM conversation_summaries
@@ -1469,7 +1502,7 @@ async function requestSummary(env, payload) {
   `).bind(
     id,
     conversation.conversation_key,
-    conversation.display_name,
+    namedConversation.display_name,
     windowType,
     windowConfig.windowDays,
     windowConfig.messageLimit,
@@ -1524,6 +1557,7 @@ async function requestViewSummary(env, payload) {
   }
 
   const viewKey = await viewKeyFor(windowDays, listLimit, conversationKeys);
+  await expireSummaryJobs(env, 'message_view_summaries', 'view_key', viewKey);
   const existing = await env.DB.prepare(`
     SELECT *
     FROM message_view_summaries
@@ -1687,11 +1721,12 @@ async function getSummaryJobs(env, url) {
     LIMIT ?
   `).bind(status, limit).all();
 
-  return json({ jobs: jobs.results });
+  return json({ jobs: await withContactNames(env, jobs.results) });
 }
 
 async function completeSummaryJob(env, id, payload) {
   const status = normalizeSummaryStatus(payload.status);
+  if (status === 'completed' && !String(payload.summary || '').trim()) return json({ error: 'Summary text is required.' }, 400);
   const themesJson = payload.themes_json
     ? JSON.stringify(payload.themes_json)
     : payload.themes
@@ -1713,7 +1748,7 @@ async function completeSummaryJob(env, id, payload) {
       model = COALESCE(?, model),
       error = ?,
       updated_at = datetime('now')
-    WHERE id = ?
+    WHERE id = ? AND status IN ('queued', 'running')
   `).bind(
     status,
     payload.started_at || null,
@@ -1760,6 +1795,7 @@ async function getViewSummaryJobs(env, url) {
 
 async function completeViewSummaryJob(env, id, payload) {
   const status = normalizeSummaryStatus(payload.status);
+  if (status === 'completed' && !String(payload.summary || '').trim()) return json({ error: 'Summary text is required.' }, 400);
   const themesJson = payload.themes_json
     ? JSON.stringify(payload.themes_json)
     : payload.themes
@@ -1781,7 +1817,7 @@ async function completeViewSummaryJob(env, id, payload) {
       model = COALESCE(?, model),
       error = ?,
       updated_at = datetime('now')
-    WHERE id = ?
+    WHERE id = ? AND status IN ('queued', 'running')
   `).bind(
     status,
     payload.started_at || null,
@@ -2051,7 +2087,7 @@ function windowForType(value) {
 function normalizeSummary(summary) {
   if (!summary) return null;
   return {
-    ...summary,
+    ...summaryState(summary),
     themes: parseJson(summary.themes_json, []),
   };
 }
@@ -2059,10 +2095,28 @@ function normalizeSummary(summary) {
 function normalizeViewSummary(summary) {
   if (!summary) return null;
   return {
-    ...summary,
+    ...summaryState(summary),
     conversation_keys: parseJson(summary.conversation_keys_json, []),
     themes: parseJson(summary.themes_json, []),
   };
+}
+
+// A summary subprocess has a five-minute deadline. Give network work another
+// ten minutes, then allow an explicit retry after a crash or lost connection.
+function summaryState(summary) {
+  const raw = summary.updated_at || summary.requested_at;
+  const updated = Date.parse(raw?.includes('T') ? raw : `${raw?.replace(' ', 'T')}Z`);
+  if (['queued', 'running'].includes(summary.status) && Date.now() - updated > 15 * 60 * 1000) {
+    return { ...summary, status: 'failed', error: 'Summary interrupted. Please try again.' };
+  }
+  // Older workers stored stderr, which can include message text. Never expose it.
+  return { ...summary, error: summary.status === 'failed' ? 'Could not finish this summary. Please try again.' : null };
+}
+
+async function expireSummaryJobs(env, table, column, value) {
+  await env.DB.prepare(`UPDATE ${table} SET status = 'failed', error = 'Summary interrupted. Please try again.', updated_at = datetime('now')
+    WHERE ${column} = ? AND status IN ('queued', 'running') AND datetime(updated_at) < datetime('now', '-15 minutes')`)
+    .bind(value).run();
 }
 
 function normalizeViewListLimit(value) {

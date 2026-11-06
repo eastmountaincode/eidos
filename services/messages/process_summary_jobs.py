@@ -55,7 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wait-timeout", type=int, default=300, help="Seconds between fallback queue checks; waiting happens locally.")
     parser.add_argument("--error-retry-interval", type=int, default=30, help="Seconds to wait after a worker error before reconnecting.")
     parser.add_argument("--codex-bin", default=default_codex_bin())
-    parser.add_argument("--codex-model", default=os.environ.get("EIDOS_SUMMARY_MODEL", "gpt-5.4-mini"))
+    parser.add_argument("--codex-model", default=os.environ.get("EIDOS_SUMMARY_MODEL", "gpt-6-luna"))
     parser.add_argument("--workdir", default=str(eidos_home))
     return parser.parse_args()
 
@@ -199,11 +199,14 @@ def query_latest_messages(chat_db: Path, job: dict[str, Any], limit: int = 100) 
 
 
 def query_cached_messages(args: argparse.Namespace, job: dict[str, Any]) -> list[dict[str, Any]]:
-    limit = int(job.get("message_limit") or 100)
-    query = urllib.parse.urlencode({
+    limit = int(job.get("message_limit") or 5000)
+    params = {
         "conversation_key": job["conversation_key"],
         "limit": max(limit, 1),
-    })
+    }
+    if job.get("window_days"):
+        params["since"] = (datetime.now(tz=timezone.utc) - timedelta(days=int(job["window_days"]))).isoformat()
+    query = urllib.parse.urlencode(params)
     data = request_json(args.api_url, args.api_token, f"/api/messages/conversation?{query}")
     recent = data.get("recentMessages", [])
     messages = [
@@ -303,8 +306,6 @@ Transcript:
                 "codex_bin": args.codex_bin,
                 "model": args.codex_model,
                 "workdir": str(workdir),
-                "stdout_tail": (result.stdout or "").strip()[-1000:],
-                "stderr_tail": (result.stderr or "").strip()[-1000:],
             }
             raise RuntimeError(json.dumps(details, ensure_ascii=False))
         return json.loads(output_path.read_text(encoding="utf-8"))
@@ -501,8 +502,6 @@ Rows:
                 "codex_bin": args.codex_bin,
                 "model": args.codex_model,
                 "workdir": str(workdir),
-                "stdout_tail": (result.stdout or "").strip()[-1000:],
-                "stderr_tail": (result.stderr or "").strip()[-1000:],
             }
             raise RuntimeError(json.dumps(details, ensure_ascii=False))
         return json.loads(output_path.read_text(encoding="utf-8"))
@@ -519,19 +518,13 @@ def process_job(args: argparse.Namespace, job: dict[str, Any]) -> dict[str, Any]
         chat_db = Path(args.chat_db).expanduser()
         try:
             messages = query_messages(chat_db, job)
-            if not messages and job.get("window_days"):
-                fallback_messages = query_latest_messages(chat_db, job)
-                if fallback_messages:
-                    job = {
-                        **job,
-                        "_source_note": "The requested time window had no matching messages, so this summary uses the latest available local messages for the conversation.",
-                    }
-                    messages = fallback_messages
         except Exception:
             messages = query_cached_messages(args, job)
         if not messages:
             raise RuntimeError("no messages matched this summary job")
         result = run_codex(args, job, messages)
+        if not str(result.get("summary") or "").strip():
+            raise RuntimeError("The model returned an empty summary.")
         payload = {
             "status": "completed",
             "started_at": started_at,

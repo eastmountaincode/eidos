@@ -1,7 +1,7 @@
 import type { CapabilitiesResponse } from "@/types/capabilities";
 import type { MantraResponse } from "@/types/mantra";
 import type { MemoryResponse } from "@/types/memory";
-import type { ConversationDetail, MessageIngestRequest, MessageViewSummary, MessagesOverview, SummaryWindow } from "@/types/messages";
+import type { Conversation, ConversationDetail, MessageIngestRequest, MessageViewSummary, MessagesOverview, SummaryWindow } from "@/types/messages";
 import type { StyleEntry, StylesResponse } from "@/types/styles";
 import type { SourceEntry, SourcesResponse } from "@/types/sources";
 import type { FutureEvent, FutureEventsResponse } from "@/types/future";
@@ -112,6 +112,13 @@ export function requestMessagesIngest() {
 export function getConversationDetail(conversationKey: string) {
   const query = new URLSearchParams({ conversation_key: conversationKey });
   return workerFetch<ConversationDetail>(`/api/messages/conversation?${query}`);
+}
+
+export function saveContactName(conversationKey: string, displayName: string) {
+  return workerFetch<{ conversation: Conversation }>("/api/messages/contact-name", {
+    method: "PATCH",
+    body: JSON.stringify({ conversation_key: conversationKey, display_name: displayName }),
+  });
 }
 
 export function requestConversationSummary(conversationKey: string, windowType: SummaryWindow) {

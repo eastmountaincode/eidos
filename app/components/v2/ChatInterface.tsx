@@ -74,7 +74,7 @@ export function ChatInterface() {
         {chat.turns.length || pending ? (
           <div className="mx-auto w-full max-w-[800px] shrink-0 py-8 sm:py-10">
             {chat.hasOlder ? <button className="mx-auto mb-7 block text-[13px] text-muted-foreground hover:text-foreground disabled:opacity-50" disabled={chat.loadingOlder} onClick={() => void loadOlder()} type="button">
-              {chat.loadingOlder ? 'Loading…' : 'Earlier messages'}
+              {chat.loadingOlder ? 'Loading' : 'Earlier messages'}
             </button> : null}
             <ol className="flex flex-col gap-7">
               {chat.turns.map((turn) => (
@@ -88,7 +88,7 @@ export function ChatInterface() {
                   </div> : null}
                   {turn.status === 'queued' || turn.status === 'running' ? <div className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground" role="status">
                     <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" />
-                    {turn.status === 'running' ? 'Thinking…' : chat.online ? 'Sending to Eidos…' : 'Waiting for Eidos to reconnect…'}
+                    {turn.status === 'running' ? 'Thinking' : chat.online ? 'Sending to Eidos' : 'Waiting for Eidos to reconnect'}
                   </div> : null}
                   {turn.status === 'failed' ? <div className="space-y-2 px-1 text-[13px] text-destructive">
                     <p>{turn.error || 'Eidos could not finish this reply.'}</p>
@@ -101,7 +101,7 @@ export function ChatInterface() {
               {pending ? <li className="space-y-2">
                 <div className="flex justify-end"><div className="max-w-[85%] whitespace-pre-wrap break-words rounded-md bg-secondary px-4 py-3 text-[15px] leading-relaxed text-foreground">{pending.prompt}<ChatAttachments files={pending.attachments} /></div></div>
                 <div className="text-right text-[12px] text-muted-foreground">
-                  {chat.sending ? 'Sending…' : <button type="button" onClick={() => void chat.send(pending.prompt)}>Confirm delivery</button>}
+                  {chat.sending ? 'Sending' : <button type="button" onClick={() => void chat.send(pending.prompt)}>Confirm delivery</button>}
                 </div>
               </li> : null}
             </ol>
@@ -137,7 +137,7 @@ export function ChatInterface() {
               placeholder="Message Eidos" ref={inputRef} rows={2} value={draft} />
             <div className="flex flex-wrap items-center gap-1 px-1 pb-1 sm:gap-2 sm:px-2">
               <input type="file" id="eidos-files" ref={fileRef} className="hidden" multiple accept={attachmentAccept} onChange={(event) => { attachments.add(Array.from(event.target.files || [])); event.target.value = ''; }} />
-              <button type="button" aria-label="Attach files" title="Attach files · up to 25 MB each" disabled={!chat.loaded || chat.sending || Boolean(pending)} onClick={() => fileRef.current?.click()}
+              <button type="button" aria-label="Attach files" title="Attach files / up to 25 MB each" disabled={!chat.loaded || chat.sending || Boolean(pending)} onClick={() => fileRef.current?.click()}
                 className="grid size-8 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"><Paperclip aria-hidden="true" className="size-4" /></button>
               <ChatModelPicker settings={pending?.settings || chat.settings}
                 disabled={!chat.loaded || chat.sending || Boolean(pending)} onChange={chat.changeSettings} />
