@@ -61,6 +61,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def default_codex_bin() -> str:
+    configured = os.environ.get("CODEX_BINARY", "").strip()
+    if configured:
+        return configured
     found = shutil.which("codex")
     if found:
         return found

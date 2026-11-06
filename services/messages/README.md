@@ -79,6 +79,9 @@ from imported names. A sync preserves them; “Use imported name” removes the
 portal override. Apply `apps/api/message_contact_names.sql` before deploying
 this version of the Worker. It is an additive, idempotent migration.
 
+Set `CODEX_BINARY` in the mini's `.eidos/.env` to the same executable used by
+`ai.eidos.web-chat`; otherwise an older CLI on PATH may reject current models.
+
 Summaries run only after an explicit request. The portal reads existing status
 when opening a tab, shows the selected summary window, and lets the user retry a
 job interrupted for more than 15 minutes. The worker uses `gpt-6-luna` by default;

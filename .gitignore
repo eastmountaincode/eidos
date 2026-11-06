@@ -4,6 +4,8 @@
 
 # Local/runtime files
 node_modules/
+.wrangler/
+.dev.vars*
 .env
 .env.*
 !.env.example

@@ -5,6 +5,10 @@ from urllib.parse import parse_qs, urlparse
 import process_summary_jobs as worker
 
 class SummaryTests(unittest.TestCase):
+    def test_configured_codex_binary_precedes_old_path_install(self):
+        with patch.dict(worker.os.environ, {'CODEX_BINARY': '/current/codex'}), patch.object(worker.shutil, 'which', return_value='/old/codex'):
+            self.assertEqual(worker.default_codex_bin(), '/current/codex')
+
     def test_empty_window_does_not_summarize_older_messages(self):
         args = argparse.Namespace(chat_db='/unused', codex_model='test')
         job = {'id': 'one', 'conversation_key': 'alice', 'window_days': 7}
