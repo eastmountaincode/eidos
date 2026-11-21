@@ -131,7 +131,7 @@ export function ChatInterface() {
               </li>)}
             </ul> : null}
             <label className="sr-only" htmlFor="eidos-message">Message Eidos</label>
-            <textarea className="eidos-v2-textarea block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 pt-2 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground sm:px-3"
+            <textarea className="eidos-v2-textarea block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 pt-2 text-base leading-relaxed text-foreground outline-none placeholder:text-muted-foreground sm:px-3"
               id="eidos-message" maxLength={20000} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown}
               onPaste={(event) => { const files = Array.from(event.clipboardData.files); if (files.length && !pending && !chat.sending) { event.preventDefault(); attachments.add(files); } }}
               placeholder="Message Eidos" ref={inputRef} rows={2} value={draft} />
