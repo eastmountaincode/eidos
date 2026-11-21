@@ -15,11 +15,13 @@ test('files survive pending-message recovery and cannot change on retry', () => 
 });
 
 test('the picker offers current models and upgrades preferences without rewriting pending work', () => {
-  assert.deepEqual(chatModels.map(model => model.id), ['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-luna']);
+  assert.deepEqual(chatModels.map(model => model.id), ['gpt-6.2-sol', 'gpt-6.2-astra', 'gpt-6-luna']);
   for (const model of chatModels) assert.deepEqual(parseChatSettings({ model: model.id, speed: 'fast' }), { model: model.id, speed: 'fast' });
   const legacy = { model: 'gpt-5.6-luna', speed: 'fast' as const };
   assert.deepEqual(restoreChatPreference(legacy), { model: defaultChatSettings.model, speed: 'fast' });
   assert.deepEqual(parsePendingMessage({ id: 'pending', prompt: 'hello', settings: legacy })?.settings, legacy);
+  assert.deepEqual(restoreChatPreference({ model: 'gpt-6-astra', speed: 'fast' }), { model: 'gpt-6.2-astra', speed: 'fast' });
+  assert.deepEqual(restoreChatPreference({ model: 'gpt-6.1-sol', speed: 'standard' }), defaultChatSettings);
 });
 
 test('new messages snapshot settings, recovery and retries retain their original choices', () => {

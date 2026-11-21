@@ -14,26 +14,26 @@ import Telegram's transcript or change Telegram's session.
 
 ## Model and speed
 
-The composer has one compact model button. Its menu contains GPT-6.1 Sol,
-GPT-6 Astra, GPT-6 Luna and Standard/Fast processing.
+The composer has one compact model button. Its menu contains GPT-6.2 Sol,
+GPT-6.2 Astra, GPT-6 Luna and Standard/Fast processing.
 Fast uses more of the existing ChatGPT/Codex allowance; it is not a reasoning-depth
 setting or a new API subscription. Browser preferences are stored locally, while
 each message's choices are saved as `settings_json` in D1 before the agent runs.
 Redelivery and explicit retries retain those original choices. A new message can
 switch models without losing the conversation's Codex session.
 
-`shared/chat-settings.mjs` is the shared allowlist, verified with real replies on
-Codex 0.159.3 on October 1, 2026. Recheck live access before adding or
+`shared/chat-settings.mjs` is the shared allowlist. Sol/Astra 6.2 were verified with real replies on
+Codex 0.171.0 on November 20, 2026. Recheck live access before adding or
 retiring models. Do not silently substitute a different model. The runner passes
 the model and service tier on both `exec` and `exec resume`; Standard explicitly
 resets the tier instead of inheriting a previous Fast setting. Existing messages
 without settings and Telegram keep their previous behavior.
 
 The web-chat LaunchAgent pins an Eidos-only Codex installation. Install it with
-`npm install --prefix /Users/oasis/.eidos/runtime/codex-0.159.3 --no-audit --no-fund @openai/codex@0.159.3`
+`npm install --prefix /Users/oasis/.eidos/runtime/codex-0.171.0 --no-audit --no-fund @openai/codex@0.171.0`
 before loading the updated plist. This leaves the global Codex binary and Telegram
 runner unchanged. Codex 0.144.1 could not run these models. Legacy settings remain
-valid for saved turns/retries, but old browser preferences advance to GPT-6.1 Sol;
+valid for saved turns/retries, but old browser preferences advance to GPT-6.2 Sol;
 the picker never offers legacy models.
 
 Existing deployments must apply `apps/api/agent_chat_settings.sql` once before
@@ -85,8 +85,12 @@ isolated Python 3.13.12 environment; it does not depend on system/Homebrew Pytho
 
 - Each send has an ID created before transmission. Repeating delivery of that ID
   returns the existing turn, preventing a network retry from executing twice.
-- Only one turn per conversation can be queued or running. A database constraint
-  also enforces this across tabs and devices.
+- Multiple messages can queue while a task runs. A partial unique index allows
+  only one executing root task per conversation. Same-model/speed follow-ups
+  are durably assigned to that task and injected through app-server `turn/steer`.
+  Different model/speed choices wait for a new turn, preserving message order.
+  The root owns the combined response; follow-ups show when they were received.
+  An interrupted delivery is never replayed automatically after possible actions.
 - Queued work survives refreshes and an offline Mac mini. A disconnected running
   turn becomes failed after five minutes without a heartbeat; it is never
   automatically re-executed because the agent may already have taken actions.
@@ -152,3 +156,22 @@ https://developers.cloudflare.com/durable-objects/best-practices/websockets/
 
 Normal service startup can also use `npm run start:web`. To stop this adapter,
 unload only `ai.eidos.web-chat`; leave the Telegram and Messages services alone.
+
+## November 2026 steering/runtime upgrade
+
+Install Codex 0.171.0 at `/Users/oasis/.eidos/runtime/codex-0.171.0` and apply
+`apps/api/agent_chat_followups.sql` once (new databases use `agent_chat.sql`).
+The web adapter now uses a stdio app-server with `turn/steer`, per-turn service
+tier, saved session IDs, and image inputs. Its recovery outbox is separate from
+the old exec adapter. Claim requests include `protocol: steering-v1`; old adapters
+can finish an existing reply but cannot take new work after this Worker release.
+This permits an upgraded adapter to start alongside an old in-progress reply.
+Do not kill the old adapter until that reply is saved. Telegram remains on its
+existing exec runner.
+The new LaunchAgent is `ai.eidos.web-chat-steering`, installed from
+`services/telegram/launchd/ai.eidos.web-chat-steering.plist`. Retire the old
+`ai.eidos.web-chat` agent only after its in-progress reply completes.
+
+Run `EIDOS_LIVE_TEST=1 CODEX_BINARY=/Users/oasis/.eidos/runtime/codex-0.171.0/node_modules/.bin/codex node --import tsx scripts/verify-steering.ts`
+from `services/telegram` to verify live steering and Sol-to-Astra continuity.
+Daily background maintenance is documented in `services/maintenance/README.md`.

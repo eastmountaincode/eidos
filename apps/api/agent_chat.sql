@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS agent_chat_turns (
   model TEXT,
   settings_json TEXT,
   attachments_json TEXT NOT NULL DEFAULT '[]',
+  parent_turn_id TEXT,
   usage_json TEXT,
   prior_attempts_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -20,5 +21,6 @@ CREATE TABLE IF NOT EXISTS agent_chat_turns (
 
 CREATE INDEX IF NOT EXISTS idx_agent_chat_history ON agent_chat_turns(conversation_id, seq);
 CREATE INDEX IF NOT EXISTS idx_agent_chat_queue ON agent_chat_turns(status, seq);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_chat_active ON agent_chat_turns(conversation_id)
-  WHERE status IN ('queued', 'running');
+CREATE INDEX IF NOT EXISTS idx_agent_chat_parent ON agent_chat_turns(parent_turn_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_chat_running ON agent_chat_turns(conversation_id)
+  WHERE status = 'running' AND parent_turn_id IS NULL;

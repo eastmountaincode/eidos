@@ -2,7 +2,7 @@ import { parseChatSettings } from '../../../shared/chat-settings.mjs';
 import { parseAttachments } from '../../../shared/chat-attachments.mjs';
 import { validateStoredAttachments } from './chat-files.mjs';
 
-const publicFields = 'seq, id, conversation_id, prompt, response, status, revision, error, model, settings_json, attachments_json, created_at, updated_at';
+const publicFields = 'seq, id, conversation_id, prompt, response, status, revision, error, model, settings_json, attachments_json, parent_turn_id, created_at, updated_at';
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -50,18 +50,47 @@ export async function handleAgentChat(request, env) {
   }
 
   if (url.pathname === '/api/agent-chat/claim' && request.method === 'POST') {
+    const body = await request.json().catch(() => null);
+    // Old workers can finish their current reply but must not claim new-format work.
+    if (body?.protocol !== 'steering-v1') return json({ turn: null, upgrade_required: true });
     await signal(env, '/heartbeat');
     await expireInterruptedTurns(env);
     const token = crypto.randomUUID();
     const turn = await env.DB.prepare(`UPDATE agent_chat_turns
       SET status = 'running', claim_token = ?, revision = revision + 1, updated_at = datetime('now')
-      WHERE seq = (SELECT seq FROM agent_chat_turns WHERE status = 'queued' ORDER BY seq LIMIT 1)
+      WHERE seq = (SELECT q.seq FROM agent_chat_turns q WHERE q.status = 'queued'
+        AND NOT EXISTS (SELECT 1 FROM agent_chat_turns r WHERE r.conversation_id = q.conversation_id AND r.status = 'running')
+        ORDER BY q.seq LIMIT 1)
         AND status = 'queued' RETURNING *`).bind(token).first();
     if (!turn) return json({ turn: null });
     const previous = await env.DB.prepare(`SELECT session_id FROM agent_chat_turns
       WHERE conversation_id = ? AND seq < ? AND session_id IS NOT NULL
       ORDER BY seq DESC LIMIT 1`).bind(turn.conversation_id, turn.seq).first();
     return json({ turn: { ...turn, resume_session_id: previous?.session_id || null } });
+  }
+
+  const followupsMatch = url.pathname.match(/^\/api\/agent-chat\/turns\/([a-zA-Z0-9-]{1,80})\/followups$/);
+  if (followupsMatch && request.method === 'POST') {
+    const body = await request.json().catch(() => null);
+    if (typeof body?.claim_token !== 'string') return json({ error: 'Invalid claim.' }, 400);
+    const root = await env.DB.prepare(`SELECT * FROM agent_chat_turns WHERE id = ? AND claim_token = ?
+      AND parent_turn_id IS NULL`).bind(followupsMatch[1], body.claim_token).first();
+    if (!root) return json({ error: 'Turn claim lost.' }, 409);
+    // A rejected steer is safe to requeue only when the runtime definitively rejected it.
+    if (typeof body.requeue_id === 'string') {
+      await env.DB.prepare(`UPDATE agent_chat_turns SET status = 'queued', parent_turn_id = NULL,
+        claim_token = NULL, revision = revision + 1, updated_at = datetime('now')
+        WHERE id = ? AND parent_turn_id = ? AND status IN ('running', 'completed')`).bind(body.requeue_id, root.id).run();
+      return json({ ok: true });
+    }
+    if (root.status !== 'running') return json({ error: 'Turn is no longer running.' }, 409);
+    const turns = await env.DB.prepare(`UPDATE agent_chat_turns SET status = 'running', parent_turn_id = ?,
+      claim_token = ?, revision = revision + 1, updated_at = datetime('now')
+      WHERE seq = (SELECT q.seq FROM agent_chat_turns q WHERE q.conversation_id = ? AND q.status = 'queued'
+        AND q.seq > ? ORDER BY q.seq LIMIT 1)
+      AND settings_json IS ? AND EXISTS (SELECT 1 FROM agent_chat_turns WHERE id = ? AND claim_token = ? AND status = 'running')
+      RETURNING *`).bind(root.id, root.claim_token, root.conversation_id, root.seq, root.settings_json, root.id, root.claim_token).all();
+    return json({ turns: turns.results });
   }
 
   const updateMatch = url.pathname.match(/^\/api\/agent-chat\/turns\/([a-zA-Z0-9-]{1,80})$/);
@@ -77,7 +106,7 @@ export async function handleAgentChat(request, env) {
       return json({ error: 'Invalid response.' }, 400);
     }
     await signal(env, '/heartbeat');
-    const turn = await env.DB.prepare(`UPDATE agent_chat_turns SET
+    const updates = await env.DB.batch([env.DB.prepare(`UPDATE agent_chat_turns SET
       status = ?, response = COALESCE(?, response), error = ?, revision = revision + 1,
       session_id = COALESCE(?, session_id), model = COALESCE(?, model),
       usage_json = COALESCE(?, usage_json), updated_at = datetime('now')
@@ -85,7 +114,14 @@ export async function handleAgentChat(request, env) {
       .bind(status, body.response ?? null, status === 'failed' ? String(body.error || 'The agent could not finish this reply.').slice(0, 500) : null,
         typeof body.session_id === 'string' && body.session_id ? body.session_id : null,
         typeof body.model === 'string' ? body.model.slice(0, 100) : null,
-        body.usage ? JSON.stringify(body.usage).slice(0, 2000) : null, updateMatch[1], body.claim_token).first();
+        body.usage ? JSON.stringify(body.usage).slice(0, 2000) : null, updateMatch[1], body.claim_token),
+      env.DB.prepare(`UPDATE agent_chat_turns SET status = ?, error = ?, session_id = COALESCE(?, session_id),
+        revision = revision + 1, updated_at = datetime('now') WHERE parent_turn_id = ? AND claim_token = ?
+        AND status = 'running' AND EXISTS (SELECT 1 FROM agent_chat_turns WHERE id = ? AND claim_token = ? AND status = ?)`)
+        .bind(status, status === 'failed' ? 'The task was interrupted after receiving this follow-up. Send a new message to continue.' : null,
+          body.session_id || null, updateMatch[1], body.claim_token, updateMatch[1], body.claim_token, status),
+    ]);
+    const turn = updates[0].results[0];
     if (!turn) {
       const saved = await env.DB.prepare(`SELECT claim_token, ${publicFields} FROM agent_chat_turns WHERE id = ?`)
         .bind(updateMatch[1]).first();

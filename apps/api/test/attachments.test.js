@@ -69,11 +69,11 @@ test('file-only turns persist immutable references; missing or modified files ca
   assert.equal((await request('/api/agent-chat', { ...message, attachments: [] })).status, 400);
   assert.equal((await request('/api/agent-chat', { ...message, prompt: 'different' })).status, 409);
   assert.equal((await db.prepare('SELECT COUNT(*) n FROM agent_chat_turns').first()).n, 1);
-  const turn = (await (await request('/api/agent-chat/claim', {})).json()).turn;
+  const turn = (await (await request('/api/agent-chat/claim', { protocol: 'steering-v1' })).json()).turn;
   assert.deepEqual(JSON.parse(turn.attachments_json), [signed.attachment]);
   await request(`/api/agent-chat/turns/${turn.id}`, { claim_token: turn.claim_token, status: 'failed', response: '', error: 'test' }, 'PATCH');
   assert.equal((await request('/api/agent-chat', { id: message.id, prompt: '', retry: true })).status, 202);
-  const retried = (await (await request('/api/agent-chat/claim', {})).json()).turn;
+  const retried = (await (await request('/api/agent-chat/claim', { protocol: 'steering-v1' })).json()).turn;
   assert.equal(retried.attachments_json, turn.attachments_json);
   const history = await (await request('/api/agent-chat')).json();
   assert.deepEqual(JSON.parse(history.turns[0].attachments_json), [signed.attachment]);

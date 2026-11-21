@@ -10,6 +10,7 @@ export type ChatTurn = {
   model: string | null;
   settings_json: string | null;
   attachments_json?: string;
+  parent_turn_id?: string | null;
   created_at: string;
   updated_at: string;
 };

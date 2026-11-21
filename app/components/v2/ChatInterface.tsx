@@ -27,7 +27,7 @@ export function ChatInterface() {
   async function send(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const text = draft.trim();
-    if ((!text && !attachments.ready.length) || attachments.blocked || active || chat.sending || pending || !chat.loaded) return;
+    if ((!text && !attachments.ready.length) || attachments.blocked || chat.sending || pending || !chat.loaded) return;
     followLatest();
     setDraft('');
     const files = attachments.ready;
@@ -88,8 +88,9 @@ export function ChatInterface() {
                   </div> : null}
                   {turn.status === 'queued' || turn.status === 'running' ? <div className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground" role="status">
                     <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" />
-                    {turn.status === 'running' ? 'Thinking' : chat.online ? 'Sending to Eidos' : 'Waiting for Eidos to reconnect'}
+                    {turn.parent_turn_id ? 'Received by the current task' : turn.status === 'running' ? 'Working' : chat.online ? 'Queued for Eidos' : 'Waiting for Eidos to reconnect'}
                   </div> : null}
+                  {turn.parent_turn_id && turn.status === 'completed' ? <p className="px-1 text-[12px] text-muted-foreground">Included in the response to this task</p> : null}
                   {turn.status === 'failed' ? <div className="space-y-2 px-1 text-[13px] text-destructive">
                     <p>{turn.error || 'Eidos could not finish this reply.'}</p>
                     {turn.id === last?.id ? <button className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40" disabled={Boolean(active) || chat.sending || Boolean(pending)} onClick={() => void chat.send(turn.prompt, turn)} type="button">
@@ -142,7 +143,7 @@ export function ChatInterface() {
               <ChatModelPicker settings={pending?.settings || chat.settings}
                 disabled={!chat.loaded || chat.sending || Boolean(pending)} onChange={chat.changeSettings} />
               <button aria-label="Send message" className="ml-auto grid size-9 shrink-0 place-items-center rounded-sm bg-primary text-white transition hover:bg-primary/85 disabled:bg-secondary disabled:text-muted-foreground"
-                disabled={(!draft.trim() && !attachments.ready.length) || attachments.blocked || !chat.loaded || Boolean(active) || chat.sending || Boolean(pending)} type="submit">
+                disabled={(!draft.trim() && !attachments.ready.length) || attachments.blocked || !chat.loaded || chat.sending || Boolean(pending)} type="submit">
                 <ArrowUp aria-hidden="true" className="size-[18px]" strokeWidth={2} />
               </button>
             </div>

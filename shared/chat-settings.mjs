@@ -1,18 +1,18 @@
-// Verified with real replies on the Mac mini using Codex 0.159.3 on 2026-10-01.
+// Sol/Astra 6.2 verified with real ChatGPT-login replies on Codex 0.171.0, 2026-11-20.
 // Keep this allowlist shared by the browser, queue and runner.
 export const chatModels = [
-  { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', shortLabel: 'Sol 6.1' },
-  { id: 'gpt-6-astra', label: 'GPT-6 Astra', shortLabel: 'Astra' },
+  { id: 'gpt-6.2-sol', label: 'GPT-6.2 Sol', shortLabel: 'Sol 6.2' },
+  { id: 'gpt-6.2-astra', label: 'GPT-6.2 Astra', shortLabel: 'Astra 6.2' },
   { id: 'gpt-6-luna', label: 'GPT-6 Luna', shortLabel: 'Luna' },
 ];
 // Historical turns, interrupted deliveries and older clients keep their exact settings.
 // These are never offered in the picker or restored as a new-message preference.
-const legacyModels = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5'];
+const legacyModels = ['gpt-6.1-sol', 'gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5'];
 export const chatSpeeds = [
   { id: 'standard', label: 'Standard' },
   { id: 'fast', label: 'Fast · more usage' },
 ];
-export const defaultChatSettings = { model: 'gpt-6.1-sol', speed: 'standard' };
+export const defaultChatSettings = { model: 'gpt-6.2-sol', speed: 'standard' };
 
 export function parseChatSettings(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -26,6 +26,8 @@ export function parseChatSettings(value) {
 
 export function restoreChatPreference(value) {
   const settings = parseChatSettings(value);
+  const successor = { 'gpt-6.1-sol': 'gpt-6.2-sol', 'gpt-6-astra': 'gpt-6.2-astra' }[settings.model];
+  if (successor) return { ...settings, model: successor };
   return chatModels.some((model) => model.id === settings.model)
     ? settings : { ...settings, model: defaultChatSettings.model };
 }

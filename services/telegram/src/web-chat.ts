@@ -2,14 +2,15 @@ import { mkdir, readFile, rename, writeFile, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { config } from './config.js';
-import { abortAllQueries, sendMessage } from './codex.js';
+import { runSteerableCodex } from './steerable-codex.js';
+import { buildPrompt } from './context.js';
 import { parseChatSettings } from '../../../shared/chat-settings.mjs';
 import { prepareAttachments } from './chat-attachments.js';
 import { WakeChannel } from './wake-channel.js';
 
 type Turn = { id: string; prompt: string; claim_token: string; resume_session_id: string | null; settings_json: string | null; attachments_json?: string };
 type Result = { id: string; payload: Record<string, unknown> };
-const outbox = resolve(config.workspacePath, 'data/sessions/web-chat-outbox.json');
+const outbox = resolve(config.workspacePath, 'data/sessions/web-chat-steering-outbox.json');
 const shutdown = new AbortController();
 let stopping = false;
 
@@ -57,6 +58,7 @@ async function deliverSavedResult(): Promise<void> {
 }
 
 async function processTurn(turn: Turn) {
+  const execution = new AbortController();
   let partial = '';
   let lastSaved = '';
   let updating = false;
@@ -74,7 +76,7 @@ async function processTurn(turn: Turn) {
       console.error('[web-chat] Reply update failed:', String(error));
       if (error instanceof ApiError && error.status === 409) {
         claimLost = true;
-        abortAllQueries();
+        execution.abort();
       }
     }).finally(() => { updating = false; });
   }, 10000);
@@ -84,15 +86,32 @@ async function processTurn(turn: Turn) {
       workspacePath: config.workspacePath, workerUrl: config.messages.workerUrl || '', token: config.messages.apiToken || '', signal: shutdown.signal,
     });
     if (claimLost || stopping) throw new Error('Turn claim lost before execution.');
-    const result = await sendMessage((turn.prompt || 'Please inspect the attached files and briefly describe what they contain.') + files.context, {
-      profile: 'personal',
-      channel: 'web',
-      sourceRef: `eidos-chat:${turn.id}`,
-      resumeSessionId: turn.resume_session_id || undefined,
-      retryTransient: false,
-      settings,
+    const env: NodeJS.ProcessEnv = { ...process.env, PATH: config.codex.path };
+    delete env.OPENAI_API_KEY; delete env.CODEX_API_KEY;
+    const prompt = await buildPrompt((turn.prompt || 'Please inspect the attached files and briefly describe what they contain.') + files.context,
+      'personal', 'web', `eidos-chat:${turn.id}`);
+    const result = await runSteerableCodex({
+      binary: config.codex.binary, cwd: config.workspacePath, env, prompt,
+      sessionId: turn.resume_session_id || undefined,
+      model: settings?.model || config.codex.model, speed: settings?.speed,
       images: files.images,
-      onPartialText: (text) => { partial = text; },
+      signal: AbortSignal.any([shutdown.signal, execution.signal]),
+      onText: (text) => { partial = text; },
+      requeue: async (id) => { await request(`/turns/${turn.id}/followups`, { claim_token: turn.claim_token, requeue_id: id }); },
+      nextFollowups: async () => {
+        const { turns } = await request<{ turns: Turn[] }>(`/turns/${turn.id}/followups`, { claim_token: turn.claim_token });
+        return Promise.all(turns.map(async (next) => {
+          try {
+            const more = await prepareAttachments(next.attachments_json, {
+              workspacePath: config.workspacePath, workerUrl: config.messages.workerUrl || '', token: config.messages.apiToken || '', signal: shutdown.signal,
+            });
+            return { id: next.id, images: more.images, prompt: `Andrew sent this follow-up while you are working. Incorporate it into the current task. Preserve the existing objective unless he clearly cancels or replaces it.\nCurrent conversation reference: eidos-chat:${next.id}\n\n${next.prompt || 'Please inspect the attached files.'}${more.context}` };
+          } catch (cause) {
+            await request(`/turns/${turn.id}/followups`, { claim_token: turn.claim_token, requeue_id: next.id });
+            throw cause;
+          }
+        }));
+      },
     });
     clearInterval(heartbeat);
     await pendingUpdate;
@@ -108,7 +127,6 @@ async function processTurn(turn: Turn) {
       error,
       session_id: result.sessionId || undefined,
       model: settings?.model || config.codex.model || null,
-      usage: result.usage,
     } });
     if (!stopping) await deliverSavedResult();
   } catch (error) {
@@ -128,7 +146,6 @@ async function processTurn(turn: Turn) {
 function stop() {
   stopping = true;
   shutdown.abort();
-  abortAllQueries();
 }
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
@@ -140,7 +157,7 @@ while (!stopping) {
   try {
     const revision = wake.revision;
     await deliverSavedResult();
-    const { turn } = await request<{ turn: Turn | null }>('/claim', {});
+    const { turn } = await request<{ turn: Turn | null }>('/claim', { protocol: 'steering-v1' });
     if (turn) await processTurn(turn);
     else await wake.waitSince(revision);
   } catch (error) {
